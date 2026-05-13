@@ -17,6 +17,7 @@ class NodeManager:
         self.db_path = db_path
         self.pool = SSHConnectionPool()
         self._init_db()
+        self._init_groups_db()
 
     def _init_db(self) -> None:
         db = sqlite3.connect(str(self.db_path))
@@ -102,6 +103,100 @@ class NodeManager:
             return NodeStatus.ONLINE if result.ok else NodeStatus.OFFLINE
         except Exception:
             return NodeStatus.OFFLINE
+
+
+    # -- 分组管理 --
+
+    def _init_groups_db(self) -> None:
+        db = sqlite3.connect(str(self.db_path))
+        db.execute("""CREATE TABLE IF NOT EXISTS groups (
+            name TEXT PRIMARY KEY,
+            description TEXT DEFAULT '',
+            nodes TEXT DEFAULT '[]',
+            created_at TEXT DEFAULT (datetime('now'))
+        )""")
+        db.commit()
+        db.close()
+
+    def add_group(self, name: str, description: str = "") -> dict:
+        db = sqlite3.connect(str(self.db_path))
+        db.execute(
+            "INSERT OR REPLACE INTO groups VALUES (?,?,?,datetime('now'))",
+            (name, description, "[]"),
+        )
+        db.commit()
+        db.close()
+        return {"ok": True, "group": name}
+
+    def list_groups(self):
+        db = sqlite3.connect(str(self.db_path))
+        try:
+            rows = db.execute("SELECT * FROM groups").fetchall()
+            result = []
+            for row in rows:
+                result.append({
+                    "name": row[0],
+                    "description": row[1],
+                    "nodes": json.loads(row[2]),
+                })
+            return result
+        except sqlite3.OperationalError:
+            self._init_groups_db()
+            return []
+        finally:
+            db.close()
+
+    def add_node_to_group(self, node_name: str, group_name: str):
+        db = sqlite3.connect(str(self.db_path))
+        row = db.execute("SELECT * FROM groups WHERE name = ?", (group_name,)).fetchone()
+        if row is None:
+            db.close()
+            return {"ok": False, "error": f"分组不存在: {group_name}"}
+        nodes = json.loads(row[2])
+        if node_name not in nodes:
+            nodes.append(node_name)
+            db.execute(
+                "UPDATE groups SET nodes = ? WHERE name = ?",
+                (json.dumps(nodes), group_name),
+            )
+            db.commit()
+        db.close()
+        return {"ok": True, "group": group_name, "nodes": nodes}
+
+    def list_nodes_by_group(self, group_name: str):
+        db = sqlite3.connect(str(self.db_path))
+        row = db.execute("SELECT * FROM groups WHERE name = ?", (group_name,)).fetchone()
+        db.close()
+        if row is None:
+            return []
+        node_names = json.loads(row[2])
+        result = []
+        for name in node_names:
+            node = self.get_node(name)
+            if node:
+                result.append(node)
+        return result
+
+    # -- 批量执行 --
+
+    async def batch_exec(self, node_names: list[str], command: str, timeout: int = 60):
+        """多节点并发执行命令"""
+        import asyncio
+        results = {}
+        tasks = []
+        for name in node_names:
+            tasks.append(self.exec_command(name, command, timeout))
+        outputs = await asyncio.gather(*tasks, return_exceptions=True)
+        for name, output in zip(node_names, outputs):
+            if isinstance(output, Exception):
+                from ait.nodes.models import CommandResult
+                results[name] = CommandResult(
+                    node=name, command=command,
+                    stderr=str(output), exit_code=-1, ok=False,
+                )
+            else:
+                results[name] = output
+        return results
 
     async def close(self) -> None:
         await self.pool.close_all()

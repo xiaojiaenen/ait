@@ -60,3 +60,90 @@ def register_ssh_tools(registry, node_manager: NodeManager):
         )
         node_manager.add_node(node)
         return {"ok": True, "node": name}
+    @registry.tool(
+        name="add_group",
+        description="创建节点分组。",
+    )
+    def add_group(name: str, description: str = "") -> dict:
+        """创建分组"""
+        return node_manager.add_group(name, description)
+
+    @registry.tool(
+        name="list_groups",
+        description="列出所有节点分组。",
+    )
+    def list_groups() -> list[dict]:
+        """列出分组"""
+        return node_manager.list_groups()
+
+    @registry.tool(
+        name="add_node_to_group",
+        description="将节点添加到分组。",
+    )
+    def add_node_to_group(node: str, group: str) -> dict:
+        """将节点添加到分组"""
+        return node_manager.add_node_to_group(node, group)
+
+    @registry.tool(
+        name="batch_exec",
+        description="在多个节点上并发执行相同的命令。node_names 是节点名称列表。",
+    )
+    async def batch_exec(node_names: list[str], command: str, timeout: int = 60) -> dict:
+        """多节点并发执行命令"""
+        results = await node_manager.batch_exec(node_names, command, timeout)
+        return {
+            name: {
+                "ok": r.ok,
+                "stdout": r.stdout,
+                "stderr": r.stderr,
+                "exit_code": r.exit_code,
+            }
+            for name, r in results.items()
+        }
+    @registry.tool(
+        name="upload_file",
+        description="上传本地文件到远程节点。local_path 必须是本地存在的文件路径。",
+    )
+    async def upload_file(node: str, local_path: str, remote_path: str) -> dict:
+        """上传文件到远程节点"""
+        try:
+            from pathlib import Path
+            local = Path(local_path).expanduser()
+            if not local.exists():
+                return {"ok": False, "error": f"本地文件不存在: {local_path}"}
+
+            target = node_manager.get_node(node)
+            if target is None:
+                return {"ok": False, "error": f"节点不存在: {node}"}
+
+            conn = await node_manager.pool.get_connection(target)
+            async with conn.start_sftp_client() as sftp:
+                await sftp.put(str(local), remote_path)
+
+            return {"ok": True, "node": node, "remote_path": remote_path}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @registry.tool(
+        name="download_file",
+        description="从远程节点下载文件到本地。",
+    )
+    async def download_file(node: str, remote_path: str, local_path: str) -> dict:
+        """从远程节点下载文件"""
+        try:
+            from pathlib import Path
+            local = Path(local_path).expanduser()
+
+            target = node_manager.get_node(node)
+            if target is None:
+                return {"ok": False, "error": f"节点不存在: {node}"}
+
+            conn = await node_manager.pool.get_connection(target)
+            async with conn.start_sftp_client() as sftp:
+                await sftp.get(remote_path, str(local))
+
+            return {"ok": True, "node": node, "local_path": str(local)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
