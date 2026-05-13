@@ -51,8 +51,26 @@ class OpsAgent:
         self.node_manager = NodeManager(config_dir / "nodes.db")
 
         # LLM - 完全交给 wuwei
+        # 尝试从配置或环境变量加载
         try:
-            self.llm = LLMGateway.from_env()
+            from ait.config import load_config
+            config = load_config(config_dir)
+            llm_config = config.llm
+
+            # 推断 env_prefix
+            base = llm_config.base_url or ""
+            if "deepseek" in base:
+                prefix = "DEEPSEEK"
+            elif "openai" in base:
+                prefix = "OPENAI"
+            else:
+                prefix = "DEEPSEEK"
+
+            self.llm = LLMGateway.from_env(
+                env_prefix=prefix,
+                base_url=llm_config.base_url or None,
+                model=llm_config.model or None,
+            )
         except Exception as e:
             raise RuntimeError(
                 "无法初始化 LLM 网关。请设置环境变量，例如:\n"
