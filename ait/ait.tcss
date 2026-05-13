@@ -1,0 +1,64 @@
+Screen {
+    background: $surface;
+}
+
+Header {
+    background: $panel;
+    dock: top;
+    height: 1;
+}
+
+Footer {
+    background: $panel;
+    dock: bottom;
+    height: 1;
+}
+
+ChatScreen {
+    height: 1fr;
+}
+
+#chat-area {
+    height: 1fr;
+    border: none;
+    padding: 0 1;
+}
+
+#chat-area .user-msg {
+    color: $success;
+}
+
+#chat-area .assistant-msg {
+    color: $text;
+}
+
+#chat-area .tool-msg {
+    color: $secondary;
+}
+
+#chat-area .error-msg {
+    color: $error;
+}
+
+#input-bar {
+    dock: bottom;
+    height: auto;
+    min-height: 3;
+    max-height: 10;
+    border: solid $primary;
+    margin: 0 1 1 1;
+    padding: 0 0 0 1;
+}
+
+#input-bar:focus {
+    border: solid $accent;
+}
+
+Input {
+    background: transparent;
+    border: none;
+}
+
+Input:focus {
+    border: none;
+}
