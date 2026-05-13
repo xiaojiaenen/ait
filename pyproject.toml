@@ -32,7 +32,7 @@ Homepage = "https://github.com/xiaojiaenen/ait"
 Repository = "https://github.com/xiaojiaenen/ait"
 
 [project.scripts]
-ait = "ait.cli:main"
+ait = "ait.cli:app"
 
 [tool.ruff]
 line-length = 100
