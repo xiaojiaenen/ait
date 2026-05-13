@@ -1,15 +1,17 @@
 """工具执行结果面板 — 右侧栏，不影响主对话"""
 from __future__ import annotations
 
+import sys
+
 from textual.containers import Vertical
 from textual.widgets import Static, Label
 
 
-# 工具中文名映射
 TOOL_CN_NAMES = {
     "exec_command": "执行命令",
     "list_nodes": "节点列表",
     "add_node": "添加节点",
+    "remove_node": "删除节点",
     "add_group": "创建分组",
     "list_groups": "分组列表",
     "add_node_to_group": "节点入组",
@@ -31,20 +33,67 @@ class ToolPanel(Vertical):
 
     def compose(self):
         yield Label("[bold]工具[/]", id="tool-panel-title")
-        yield Static("", id="tool-results")
+        yield Static("[dim]工具执行结果将显示在此[/]", id="tool-results")
+
+    def start_tool(self, name: str, node: str, cmd: str) -> None:
+        """工具开始执行时显示的提示"""
+        cn_name = TOOL_CN_NAMES.get(name, name)
+        label = cn_name
+        if node and node != "-":
+            label += " · {}".format(node)
+        if cmd:
+            label += " [dim]{}[/]".format(cmd[:40])
+        results = self.query_one("#tool-results", Static)
+        current = str(results.renderable) if results.renderable else ""
+        if current == "[dim]工具执行结果将显示在此[/]":
+            current = ""
+        hint = "[dim yellow]⏳ {} ...[/]".format(label)
+        if current:
+            results.update(current + "\n\n" + hint)
+        else:
+            results.update(hint)
 
     def add_result(self, name: str, node: str, cmd: str, output) -> None:
         """添加一次工具执行的结果卡片"""
+        # Debug: print to stderr
+        print(f"[ToolPanel] add_result: name={name}, node={node}, cmd={cmd}, output_type={type(output).__name__}",
+              file=sys.stderr, flush=True)
+
         results = self.query_one("#tool-results", Static)
-        current = results.renderable
-        prev = str(current) if current else ""
+        current = str(results.renderable) if results.renderable else ""
+        if current == "[dim]工具执行结果将显示在此[/]":
+            current = ""
 
         card = self._format_card(name, node, cmd, output)
-        if prev:
-            results.update(prev + "\n\n" + card)
-        else:
+        print(f"[ToolPanel] card preview: {card[:120]}...", file=sys.stderr, flush=True)
+
+        if current and card:
+            # Replace the "running" hint if it exists
+            cn_name = TOOL_CN_NAMES.get(name, name)
+            running_hint = "[dim yellow]⏳ {} ".format(cn_name)
+            if running_hint in current:
+                # Replace the running line with the actual card
+                lines = current.split("\n\n")
+                new_lines = []
+                replaced = False
+                for line in lines:
+                    if running_hint in line and not replaced:
+                        new_lines.append(card)
+                        replaced = True
+                    else:
+                        new_lines.append(line)
+                if not replaced:
+                    new_lines.append(card)
+                results.update("\n\n".join(new_lines))
+            else:
+                results.update(current + "\n\n" + card)
+        elif card:
             results.update(card)
-        self.query_one("#tool-results", Static).scroll_end(animate=False)
+
+        try:
+            results.scroll_end(animate=False)
+        except Exception:
+            pass
 
     def _format_card(self, name: str, node: str, cmd: str, output) -> str:
         from rich.markup import escape as rich_escape
@@ -55,28 +104,50 @@ class ToolPanel(Vertical):
 
         if isinstance(output, dict):
             ok = output.get("ok", True)
-            stdout = output.get("stdout", "") or output.get("error", "")
-            if not stdout and "error" in output and isinstance(output.get("error"), str):
-                stdout = output["error"]
-            if not stdout:
+            # 优先取 stdout
+            if output.get("stdout"):
+                stdout = output["stdout"]
+            elif output.get("stderr"):
+                stdout = output["stderr"]
+            elif output.get("error"):
+                stdout = str(output["error"])
+            else:
+                # 生成摘要
                 parts = []
                 for k, v in output.items():
-                    if k in ("ok", "exit_code", "duration_ms"):
+                    if k in ("ok", "exit_code", "duration_ms", "stdout", "stderr"):
                         continue
                     if isinstance(v, dict):
                         parts.append("{}: {}".format(k, "✓" if v.get("ok") else "✗"))
                     elif isinstance(v, list):
-                        parts.append("{}: {} 项".format(k, len(v)))
+                        if len(v) <= 5:
+                            names = [n.get("name", str(n)) if isinstance(n, dict) else str(n) for n in v]
+                            parts.append("{}: [{}]".format(k, ", ".join(names)))
+                        else:
+                            names = [n.get("name", str(n)) if isinstance(n, dict) else str(n) for n in v[:4]]
+                            parts.append("{}: [{}...] ({}项)".format(k, ", ".join(names), len(v)))
                     elif isinstance(v, str) and len(v) > 60:
-                        parts.append("{}: ...".format(k))
+                        parts.append("{}: {}...".format(k, v[:57]))
                     elif v is not None:
                         parts.append("{}: {}".format(k, v))
                 if parts:
                     stdout = "  ".join(parts)
-        else:
-            stdout = str(output)
+        elif isinstance(output, list):
+            # list_nodes 等返回列表的工具
+            if len(output) <= 8:
+                names = [n.get("name", str(n)) if isinstance(n, dict) else str(n) for n in output]
+                stdout = "找到 {} 个节点:\n{}".format(len(output), "\n".join("- " + n for n in names))
+            else:
+                names = [n.get("name", str(n)) if isinstance(n, dict) else str(n) for n in output[:6]]
+                stdout = "找到 {} 个节点:\n{}\n  ...(+{} 项)".format(
+                    len(output), "\n".join("- " + n for n in names), len(output) - 6
+                )
+        elif isinstance(output, str):
+            stdout = output
+        elif output is not None:
+            stdout = str(output)[:500]
 
-        # 转义 Rich 标记符号，防止输出中的 [ ] 破坏渲染
+        # 转义 Rich 标记符号
         stdout = rich_escape(stdout)
 
         lines = stdout.strip().split("\n")
@@ -101,4 +172,4 @@ class ToolPanel(Vertical):
         ) + folded
 
     def clear_results(self) -> None:
-        self.query_one("#tool-results", Static).update("")
+        self.query_one("#tool-results", Static).update("[dim]工具执行结果将显示在此[/]")

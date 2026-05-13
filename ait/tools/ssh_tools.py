@@ -52,6 +52,7 @@ def register_ssh_tools(registry, node_manager: NodeManager):
         name: str, host: str, port: int = 22, user: str = "root",
         auth_method: str = "key", key_path: str | None = None,
         password: str | None = None,
+        login_shell: bool = True,
         tags: list[str] | None = None, groups: list[str] | None = None,
     ) -> dict:
         """添加节点"""
@@ -60,6 +61,7 @@ def register_ssh_tools(registry, node_manager: NodeManager):
         node = Node(
             name=name, host=host, port=port, user=user,
             auth_method=method, key_path=key_path, password=password,
+            login_shell=login_shell,
             tags=tags or [], groups=groups or [],
         )
         node_manager.add_node(node)

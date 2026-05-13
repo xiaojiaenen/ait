@@ -222,6 +222,12 @@ class MainScreen(Screen):
                     self._tool_node = args.get("node", "-")
                     self._tool_cmd = str(args.get("command", ""))[:80]
                     self._tool_time = datetime.datetime.now().strftime("%H:%M:%S")
+                    try:
+                        tools.start_tool(self._tool_name,
+                                         self._tool_node,
+                                         self._tool_cmd)
+                    except Exception:
+                        pass
                 elif event.type == "tool_end":
                     chat.flush()
                     first_text = True

@@ -29,6 +29,7 @@ class Node(BaseModel):
     auth_method: AuthMethod = Field(default=AuthMethod.KEY, description="认证方式")
     key_path: Optional[str] = Field(default=None, description="SSH 私钥路径")
     password: Optional[str] = Field(default=None, description="SSH 密码（不推荐）")
+    login_shell: bool = Field(default=True, description="使用登录 Shell（加载 profile/rc）")
     tags: list[str] = Field(default_factory=list, description="标签")
     groups: list[str] = Field(default_factory=list, description="所属分组")
     status: NodeStatus = Field(default=NodeStatus.OFFLINE, description="当前状态")

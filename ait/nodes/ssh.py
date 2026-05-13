@@ -107,6 +107,9 @@ class SSHConnectionPool:
         start = time.time()
         try:
             conn = await self.get_connection(node)
+            # 登录 Shell：通过 bash -l -c 加载完整环境（PATH、别名等）
+            if getattr(node, "login_shell", True) and not command.startswith("bash "):
+                command = "bash -l -c " + __import__("shlex").quote(command)
             result = await asyncio.wait_for(
                 conn.run(command),
                 timeout=timeout,

@@ -111,7 +111,7 @@ class OpsAgent:
                 ConsoleHook(),
             ],
             default_system_prompt=OPS_SYSTEM_PROMPT,
-            default_max_steps=10,
+            default_max_steps=20,
         )
 
     def register_tools(self, tools: list) -> None:

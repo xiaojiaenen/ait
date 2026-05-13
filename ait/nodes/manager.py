@@ -39,6 +39,7 @@ class NodeManager:
             "auth_method TEXT DEFAULT 'key', "
             "key_path TEXT, "
             "password TEXT, "
+            "login_shell INTEGER DEFAULT 1, "
             "tags TEXT DEFAULT '[]', "
             "groups TEXT DEFAULT '[]', "
             "created_at TEXT DEFAULT (datetime('now'))"
@@ -46,22 +47,24 @@ class NodeManager:
         )
         db.execute(sql)
         db.commit()
-        # 兼容旧表：如果 password 列不存在则添加
-        try:
-            db.execute("ALTER TABLE nodes ADD COLUMN password TEXT")
-            db.commit()
-        except sqlite3.OperationalError:
-            pass
+        # 兼容旧表
+        for col in ["password TEXT", "login_shell INTEGER DEFAULT 1"]:
+            try:
+                db.execute("ALTER TABLE nodes ADD COLUMN " + col)
+                db.commit()
+            except sqlite3.OperationalError:
+                pass
         db.close()
 
     def add_node(self, node: Node):
         db = sqlite3.connect(str(self.db_path))
         db.execute(
             "INSERT OR REPLACE INTO nodes "
-            "(name, host, port, username, auth_method, key_path, password, tags, groups, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))",
+            "(name, host, port, username, auth_method, key_path, password, login_shell, tags, groups, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))",
             (node.name, node.host, node.port, node.user,
              node.auth_method.value, node.key_path, node.password,
+             1 if node.login_shell else 0,
              json.dumps(node.tags), json.dumps(node.groups)),
         )
         db.commit()
@@ -102,6 +105,7 @@ class NodeManager:
                 user=row["username"],
                 auth_method=row["auth_method"], key_path=row["key_path"],
                 password=row["password"],
+                login_shell=bool(row["login_shell"]) if "login_shell" in row.keys() else True,
                 tags=node_tags, groups=groups,
             ))
         return nodes
@@ -130,6 +134,7 @@ class NodeManager:
             user=row["username"],
             auth_method=row["auth_method"], key_path=row["key_path"],
             password=row["password"],
+            login_shell=bool(row["login_shell"]) if "login_shell" in row.keys() else True,
             tags=node_tags, groups=groups,
         )
 
