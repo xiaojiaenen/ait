@@ -23,6 +23,7 @@ class ChatScreen(Screen):
         self.config_dir = config_dir
         self.agent = None
         self._messages = []
+        self._chat_text = ""
 
     def compose(self):
         with Horizontal():
@@ -55,11 +56,11 @@ class ChatScreen(Screen):
     def write_line(self, text: str) -> None:
         """向对话区追加一行"""
         chat = self.query_one("#chat-area", Static)
-        current = chat.renderable or ""
-        if current:
-            chat.update(str(current) + "\n" + text)
+        if self._chat_text:
+            self._chat_text += "\n" + text
         else:
-            chat.update(text)
+            self._chat_text = text
+        chat.update(self._chat_text)
         container = self.query_one("#chat-scroll", ScrollableContainer)
         container.scroll_end(animate=False)
 
@@ -122,4 +123,5 @@ class ChatScreen(Screen):
 
     def clear(self) -> None:
         chat = self.query_one("#chat-area", Static)
+        self._chat_text = ""
         chat.update("")
