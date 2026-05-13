@@ -66,6 +66,18 @@ Underline.-active {
     background: #58a6ff;
 }
 
+/* -- 节点建议框 -- */
+#node-suggest {
+    dock: bottom;
+    height: auto;
+    max-height: 12;
+    margin: 0 1;
+    padding: 1 2;
+    border: tall #58a6ff;
+    background: #161b22;
+    color: #c9d1d9;
+}
+
 /* -- 输入栏 -- */
 #input-bar {
     dock: bottom;

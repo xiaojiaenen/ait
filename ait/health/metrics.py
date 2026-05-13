@@ -15,11 +15,13 @@ class MetricsCollector:
         """采集单个节点指标"""
         result = await self._node_manager.exec_command(
             node_name,
-            "cat /proc/stat /proc/meminfo /proc/loadavg /proc/uptime 2>/dev/null; "
-            "cat /proc/net/dev 2>/dev/null; "
-            "df / | tail -1; "
-            "cat /proc/cpuinfo 2>/dev/null | grep processor | wc -l; "
-            "free -m 2>/dev/null | tail -2 | head -1",
+            "echo '---STAT---'; cat /proc/stat | head -1; "
+            "echo '---MEM---'; cat /proc/meminfo | head -3; "
+            "echo '---LOAD---'; cat /proc/loadavg; "
+            "echo '---UPTIME---'; cat /proc/uptime; "
+            "echo '---NET---'; cat /proc/net/dev | tail -2; "
+            "echo '---DF---'; df / | tail -1; "
+            "echo '---CPUINFO---'; grep -c processor /proc/cpuinfo 2>/dev/null || echo 0",
             timeout=10,
         )
         if not result.ok:
@@ -29,76 +31,74 @@ class MetricsCollector:
         return self._parse(result.stdout, node_name)
 
     def _parse(self, raw: str, node_name: str) -> NodeMetrics:
-        """解析 /proc 输出"""
+        """解析带分隔标记的 /proc 输出"""
         metrics = NodeMetrics(node=node_name)
-        lines = raw.split("\n")
+        sections = self._split_sections(raw)
 
-        # -- /proc/stat: CPU --
-        for line in lines:
+        # -- CPU --
+        stat = sections.get("STAT", "")
+        for line in stat.split("\n"):
             if line.startswith("cpu "):
                 parts = line.split()
-                user = int(parts[1])
-                nice = int(parts[2])
-                system = int(parts[3])
-                idle = int(parts[4])
-                iowait = int(parts[5]) if len(parts) > 5 else 0
-                irq = int(parts[6]) if len(parts) > 6 else 0
-                softirq = int(parts[7]) if len(parts) > 7 else 0
-                steal = int(parts[8]) if len(parts) > 8 else 0
+                vals = [int(p) for p in parts[1:9]]
+                if len(vals) >= 4:
+                    user, nice, system, idle = vals[0], vals[1], vals[2], vals[3]
+                    iowait = vals[4] if len(vals) > 4 else 0
+                    irq = vals[5] if len(vals) > 5 else 0
+                    softirq = vals[6] if len(vals) > 6 else 0
+                    steal = vals[7] if len(vals) > 7 else 0
+                    total = user + nice + system + idle + iowait + irq + softirq + steal
+                    idle_total = idle + iowait
 
-                total = user + nice + system + idle + iowait + irq + softirq + steal
-                idle_total = idle + iowait
-
-                prev = self._prev_cpu.get(node_name)
-                if prev:
-                    prev_idle, prev_total = prev
-                    total_delta = total - prev_total
-                    idle_delta = idle_total - prev_idle
-                    if total_delta > 0:
-                        metrics.cpu_percent = round(
-                            (1 - idle_delta / total_delta) * 100, 1
-                        )
-                self._prev_cpu[node_name] = (idle_total, total)
+                    prev = self._prev_cpu.get(node_name)
+                    if prev:
+                        prev_idle, prev_total = prev
+                        total_delta = total - prev_total
+                        idle_delta = idle_total - prev_idle
+                        if total_delta > 0:
+                            metrics.cpu_percent = round((1 - idle_delta / total_delta) * 100, 1)
+                    self._prev_cpu[node_name] = (idle_total, total)
                 break
 
-        # -- /proc/meminfo: 内存 --
-        mem_total = 0
-        mem_avail = 0
-        for line in lines:
+        # -- 内存 --
+        mem = sections.get("MEM", "")
+        mem_total = mem_avail = 0
+        for line in mem.split("\n"):
             if line.startswith("MemTotal:"):
                 mem_total = self._extract_kb(line)
             elif line.startswith("MemAvailable:"):
                 mem_avail = self._extract_kb(line)
-            if mem_total > 0 and mem_avail > 0:
-                metrics.mem_percent = round((1 - mem_avail / mem_total) * 100, 1)
-                metrics.mem_total_gb = round(mem_total / 1024 / 1024, 1)
-                metrics.mem_used_gb = round((mem_total - mem_avail) / 1024 / 1024, 1)
-                break
+        if mem_total > 0 and mem_avail > 0:
+            metrics.mem_percent = round((1 - mem_avail / mem_total) * 100, 1)
+            metrics.mem_total_gb = round(mem_total / 1024 / 1024, 1)
+            metrics.mem_used_gb = round((mem_total - mem_avail) / 1024 / 1024, 1)
 
-        # -- /proc/loadavg: 负载 --
-        for line in lines:
-            parts = line.strip().split()
-            if len(parts) == 4 and all(p.replace(".", "").isdigit() for p in parts[:3]):
+        # -- 负载 (/proc/loadavg: 0.15 0.10 0.05 1/234 12345) --
+        load = sections.get("LOAD", "")
+        parts = load.strip().split()
+        if len(parts) >= 3:
+            try:
                 metrics.load_1min = float(parts[0])
                 metrics.load_5min = float(parts[1])
                 metrics.load_15min = float(parts[2])
-                break
+            except ValueError:
+                pass
 
-        # -- /proc/uptime: 运行时间 --
-        for line in lines:
-            parts = line.strip().split()
-            if len(parts) == 2:
-                try:
-                    metrics.uptime_hours = round(float(parts[0]) / 3600, 1)
-                except ValueError:
-                    pass
-                break
+        # -- 运行时间 (/proc/uptime: 12345.67 98765.43) --
+        uptime_raw = sections.get("UPTIME", "")
+        up_parts = uptime_raw.strip().split()
+        if len(up_parts) >= 1:
+            try:
+                metrics.uptime_hours = round(float(up_parts[0]) / 3600, 1)
+            except ValueError:
+                pass
 
-        # -- /proc/net/dev: 网卡流量 --
+        # -- 网卡流量 --
+        net = sections.get("NET", "")
         prev_net = getattr(self, "_prev_net", {})
-        prev_rx, prev_ts = prev_net.get(node_name, (0, 0, 0))
+        prev_rx, prev_tx, prev_ts = prev_net.get(node_name, (0, 0, 0))
         cur_rx = cur_tx = 0
-        for line in lines:
+        for line in net.split("\n"):
             if ":" in line and "lo:" not in line:
                 parts = line.strip().split()
                 if len(parts) >= 10:
@@ -107,7 +107,6 @@ class MetricsCollector:
                         cur_tx += int(parts[9])
                     except ValueError:
                         continue
-        now_ts = int(raw[:50].count("\n") + 1)  # approximate
         import time
         now_ts = time.time()
         if prev_ts > 0 and (now_ts - prev_ts) > 0:
@@ -117,26 +116,41 @@ class MetricsCollector:
             self._prev_net = {}
         self._prev_net[node_name] = (cur_rx, cur_tx, now_ts)
 
-        # -- /proc/cpuinfo: CPU 核心数 --
-        core_count = 0
-        for line in lines:
-            if line.strip().isdigit():
-                core_count = max(core_count, int(line.strip()))
-        if core_count > 0:
-            metrics.cpu_cores = core_count
+        # -- CPU 核心数 --
+        cpuinfo = sections.get("CPUINFO", "0")
+        try:
+            metrics.cpu_cores = int(cpuinfo.strip().split("\n")[0])
+        except ValueError:
+            metrics.cpu_cores = 0
 
-        # -- df: 磁盘 --
-        for line in lines:
-            if line.strip().endswith("%"):
-                parts = line.split()
-                for p in parts:
-                    if p.endswith("%"):
-                        try:
-                            metrics.disk_percent = int(p.rstrip("%"))
-                        except ValueError:
-                            pass
+        # -- 磁盘 --
+        df = sections.get("DF", "")
+        for part in df.split():
+            if part.endswith("%"):
+                try:
+                    metrics.disk_percent = int(part.rstrip("%"))
+                except ValueError:
+                    pass
 
         return metrics
+
+    @staticmethod
+    def _split_sections(raw: str) -> dict[str, str]:
+        """按 ---NAME--- 分隔符拆分输出"""
+        sections = {}
+        current_name = ""
+        current_lines = []
+        for line in raw.split("\n"):
+            if line.startswith("---") and line.endswith("---"):
+                if current_name:
+                    sections[current_name] = "\n".join(current_lines)
+                current_name = line.strip("-")
+                current_lines = []
+            else:
+                current_lines.append(line)
+        if current_name:
+            sections[current_name] = "\n".join(current_lines)
+        return sections
 
     @staticmethod
     def _extract_kb(line: str) -> int:

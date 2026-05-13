@@ -93,6 +93,9 @@ class OpsAgent:
         # 存储
         self.storage = FileStorage(str(sessions_dir))
 
+        # TUI 审批提供者（延迟设置 screen）
+        self.approval_provider = TuiApprovalProvider()
+
         # Agent
         self.agent = Agent(
             llm=self.llm,
@@ -106,13 +109,19 @@ class OpsAgent:
                 ),
                 StorageHook(self.storage),
                 HitlHook(
-                    provider=TuiApprovalProvider(),
+                    provider=self.approval_provider,
                 ),
                 ConsoleHook(),
             ],
             default_system_prompt=OPS_SYSTEM_PROMPT,
             default_max_steps=20,
         )
+
+    def set_tui_screen(self, screen) -> None:
+        """设置 TUI 屏幕引用（用于弹窗审批和主机密钥确认）"""
+        self.node_manager.set_screen(screen)
+        self.node_manager.set_host_key_callback(screen._verify_host_key)
+        self.approval_provider.set_screen(screen)
 
     def register_tools(self, tools: list) -> None:
         """注册额外的运维工具"""

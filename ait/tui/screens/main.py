@@ -11,6 +11,7 @@ from textual.widgets import (
     Input,
     Header,
     Footer,
+    Static,
 )
 from textual.binding import Binding
 from textual.screen import Screen
@@ -61,12 +62,14 @@ class MainScreen(Screen):
                 yield SkillsPanel()
             with TabPane("审计", id="tab-audit"):
                 yield AuditPanel()
-        yield Input(id="input-bar", placeholder="输入运维操作... (/ 触发宏)")
+        yield Input(id="input-bar", placeholder="输入运维操作... @节点名 /宏名")
+        yield Static("", id="node-suggest")
         yield Footer()
 
     def on_mount(self) -> None:
         self._write_welcome()
         self.query_one("#input-bar", Input).focus()
+        self.query_one("#node-suggest", Static).display = False
         self.run_worker(self._init_agent())
         self.set_interval(10, self._refresh_metrics)
 
@@ -120,15 +123,8 @@ class MainScreen(Screen):
         try:
             from ait.agent.ops_agent import OpsAgent
             self.agent = OpsAgent(config_dir=self.config_dir)
+            self.agent.set_tui_screen(self)
 
-            # 设置 SSH 主机密钥验证回调
-            self.agent.node_manager.set_screen(self)
-            self.agent.node_manager.set_host_key_callback(self._verify_host_key)
-
-            for hook in self.agent.agent.hooks._hooks:
-                from ait.security.tui_provider import TuiApprovalProvider
-                if hasattr(hook, "provider") and isinstance(hook.provider, TuiApprovalProvider):
-                    hook.provider.set_screen(self)
             # Refresh skills & macros
             skills = self._list_skills()
             macros = self._list_macros()
@@ -167,10 +163,120 @@ class MainScreen(Screen):
         except Exception:
             return []
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """检测 @ 输入，显示节点建议列表"""
+        if event.input.id != "input-bar":
+            return
+        value = event.value or ""
+        suggest = self.query_one("#node-suggest", Static)
+
+        # 查找最后一个 @ 位置
+        at_idx = value.rfind("@")
+        if at_idx < 0:
+            suggest.display = False
+            return
+
+        # 提取 @ 后面的部分
+        after_at = value[at_idx + 1:]
+        # 如果 @ 后面有空格，不显示建议
+        if " " in after_at:
+            suggest.display = False
+            return
+
+        # 获取节点列表
+        nodes = self._get_node_names()
+        if not nodes:
+            suggest.display = False
+            return
+
+        # 过滤匹配的节点
+        if after_at:
+            matched = [n for n in nodes if after_at.lower() in n.lower()]
+        else:
+            matched = nodes
+
+        if not matched:
+            suggest.display = False
+            return
+
+        # 渲染建议列表
+        lines = ["[bold]节点:[/]"]
+        for i, name in enumerate(matched[:8]):
+            prefix = "[bold]>[/]" if i == self._suggest_index else " "
+            lines.append("{} {}".format(prefix, name))
+        if len(matched) > 8:
+            lines.append("  ...(+{})".format(len(matched) - 8))
+        lines.append("[dim]Tab 补全  Esc 取消[/]")
+        suggest.update("\n".join(lines))
+        suggest.display = True
+        self._suggest_matches = matched
+        self._suggest_index = 0
+
+    def on_key(self, event) -> None:
+        """处理 @ 建议快捷键"""
+        suggest = self.query_one("#node-suggest", Static)
+        if not suggest.display:
+            return
+        matches = getattr(self, "_suggest_matches", [])
+        if event.key == "escape":
+            suggest.display = False
+            self._suggest_matches = []
+            self._suggest_index = 0
+        elif event.key == "tab":
+            if matches and self._suggest_index < len(matches):
+                name = matches[self._suggest_index]
+                input_bar = self.query_one("#input-bar", Input)
+                value = input_bar.value
+                at_idx = value.rfind("@")
+                # 替换 @partial 为 @name
+                new_value = value[:at_idx + 1] + name + " "
+                input_bar.value = new_value
+                input_bar.action_end()
+                suggest.display = False
+                self._suggest_matches = []
+                self._suggest_index = 0
+            event.prevent_default()
+        elif event.key == "up":
+            if self._suggest_index > 0:
+                self._suggest_index -= 1
+                self._refresh_suggest()
+        elif event.key == "down":
+            if self._suggest_index < len(matches) - 1:
+                self._suggest_index += 1
+                self._refresh_suggest()
+
+    def _refresh_suggest(self) -> None:
+        """刷新建议列表显示"""
+        suggest = self.query_one("#node-suggest", Static)
+        matches = getattr(self, "_suggest_matches", [])
+        if not matches:
+            return
+        lines = ["[bold]节点:[/]"]
+        for i, name in enumerate(matches[:8]):
+            prefix = "[bold]>[/]" if i == self._suggest_index else " "
+            lines.append("{} {}".format(prefix, name))
+        if len(matches) > 8:
+            lines.append("  ...(+{})".format(len(matches) - 8))
+        lines.append("[dim]Tab 补全  Esc 取消[/]")
+        suggest.update("\n".join(lines))
+
+    def _get_node_names(self) -> list[str]:
+        """获取已配置的节点名称列表"""
+        if self.agent is None:
+            return []
+        try:
+            nodes = self.agent.node_manager.list_nodes()
+            return [n.name for n in nodes]
+        except Exception:
+            return []
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
         if not text:
             return
+        # 隐藏建议
+        self.query_one("#node-suggest", Static).display = False
+
         input_bar = self.query_one("#input-bar", Input)
         self._command_history.append(text)
         self._history_index = -1
@@ -182,7 +288,6 @@ class MainScreen(Screen):
         chat.write_line("")
         self.query_one(ToolPanel).clear_results()
 
-        # Switch to chat tab on submission
         self.query_one("#main-tabs", TabbedContent).active = "tab-chat"
 
         if self.agent is None:
@@ -191,11 +296,33 @@ class MainScreen(Screen):
             input_bar.clear()
             return
 
-        # Check for macro prefix
-        if text.startswith("/"):
+        # @node 前缀：限定在指定节点执行
+        if text.startswith("@"):
+            parts = text.split(None, 1)
+            node_name = parts[0][1:]  # 去掉 @
+            rest = parts[1] if len(parts) > 1 else ""
+            # 验证节点存在
+            nodes = self._get_node_names()
+            if node_name not in nodes:
+                chat.write_line("*节点 `{}` 不存在，可用: {}*".format(
+                    node_name, ", ".join(nodes) if nodes else "(无)"
+                ))
+                chat.write_line("")
+                input_bar.clear()
+                return
+            if not rest:
+                chat.write_line("*请输入要在 {} 上执行的命令*".format(node_name))
+                chat.write_line("")
+                input_bar.clear()
+                return
+            # 构造节点限定命令
+            text = "在 {} 节点上执行: {}".format(node_name, rest)
+        elif text.startswith("/"):
             self.run_worker(self._run_macro(text))
-        else:
-            self.run_worker(self._run_agent(text))
+            input_bar.clear()
+            return
+
+        self.run_worker(self._run_agent(text))
         input_bar.clear()
 
     # -- Agent execution --
