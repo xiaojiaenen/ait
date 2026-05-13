@@ -29,11 +29,16 @@ class ChatPanel(Vertical):
         self._refresh()
 
     def _refresh(self) -> None:
-        md = self.query_one("#chat-area", Markdown)
-        md.update(self._current_text)
-        # 延迟滚动确保布局更新后执行
-        md.call_after_refresh(lambda: md.scroll_end(animate=False))
+        try:
+            md = self.query_one("#chat-area", Markdown)
+            md.update(self._current_text)
+            md.scroll_end(animate=False)
+        except Exception:
+            pass
 
     def clear(self) -> None:
         self._current_text = ""
-        self.query_one("#chat-area", Markdown).update("")
+        try:
+            self.query_one("#chat-area", Markdown).update("")
+        except Exception:
+            pass

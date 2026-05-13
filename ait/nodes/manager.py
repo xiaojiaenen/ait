@@ -57,7 +57,9 @@ class NodeManager:
     def add_node(self, node: Node):
         db = sqlite3.connect(str(self.db_path))
         db.execute(
-            "INSERT OR REPLACE INTO nodes VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))",
+            "INSERT OR REPLACE INTO nodes "
+            "(name, host, port, username, auth_method, key_path, password, tags, groups, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))",
             (node.name, node.host, node.port, node.user,
              node.auth_method.value, node.key_path, node.password,
              json.dumps(node.tags), json.dumps(node.groups)),
@@ -76,32 +78,59 @@ class NodeManager:
 
     def list_nodes(self, tags=None):
         db = sqlite3.connect(str(self.db_path))
+        db.row_factory = sqlite3.Row
         rows = db.execute("SELECT * FROM nodes").fetchall()
         db.close()
         nodes = []
         for row in rows:
-            node_tags = json.loads(row[6])
+            try:
+                node_tags = json.loads(row["tags"])
+            except (json.JSONDecodeError, TypeError):
+                node_tags = []
+            if not isinstance(node_tags, list):
+                node_tags = []
             if tags and not any(t in node_tags for t in tags):
                 continue
+            try:
+                groups = json.loads(row["groups"])
+            except (json.JSONDecodeError, TypeError):
+                groups = []
+            if not isinstance(groups, list):
+                groups = []
             nodes.append(Node(
-                name=row[0], host=row[1], port=row[2], user=row[3],
-                auth_method=row[4], key_path=row[5],
-                password=row[8] if len(row) > 8 else None,
-                tags=node_tags, groups=json.loads(row[7]),
+                name=row["name"], host=row["host"], port=row["port"],
+                user=row["username"],
+                auth_method=row["auth_method"], key_path=row["key_path"],
+                password=row["password"],
+                tags=node_tags, groups=groups,
             ))
         return nodes
 
     def get_node(self, name: str):
         db = sqlite3.connect(str(self.db_path))
+        db.row_factory = sqlite3.Row
         row = db.execute("SELECT * FROM nodes WHERE name = ?", (name,)).fetchone()
         db.close()
         if row is None:
             return None
+        try:
+            node_tags = json.loads(row["tags"])
+        except (json.JSONDecodeError, TypeError):
+            node_tags = []
+        if not isinstance(node_tags, list):
+            node_tags = []
+        try:
+            groups = json.loads(row["groups"])
+        except (json.JSONDecodeError, TypeError):
+            groups = []
+        if not isinstance(groups, list):
+            groups = []
         return Node(
-            name=row[0], host=row[1], port=row[2], user=row[3],
-            auth_method=row[4], key_path=row[5],
-            password=row[8] if len(row) > 8 else None,
-            tags=json.loads(row[6]), groups=json.loads(row[7]),
+            name=row["name"], host=row["host"], port=row["port"],
+            user=row["username"],
+            auth_method=row["auth_method"], key_path=row["key_path"],
+            password=row["password"],
+            tags=node_tags, groups=groups,
         )
 
     async def exec_command(self, node_name: str, command: str, timeout: int = 60):

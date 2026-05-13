@@ -69,16 +69,14 @@ class MainScreen(Screen):
 
     def _write_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
-        chat.write_line("# ait — AI 智能运维终端")
+        chat.write_line("# ait")
         chat.write_line("")
-        chat.write_line("*正在初始化 AI 引擎...*")
+        chat.write_line("*AI 运维助手*")
         chat.write_line("")
-        chat.write_line("用自然语言管理服务器，例如：")
-        chat.write_line("> 查看所有节点的状态")
-        chat.write_line("> 重启前端 nginx")
+        chat.write_line("> 查看所有节点状态")
+        chat.write_line("> 重启 nginx 服务")
         chat.write_line("")
-        chat.write_line("*1-5 切换面板  ↑↓ 历史  Ctrl+L 清屏*")
-        chat.write_line("")
+        chat.write_line("*`1-5` 面板  `↑↓` 历史  `Ctrl+L` 清屏*")
 
     # -- Tab switching --
 
@@ -134,16 +132,14 @@ class MainScreen(Screen):
                     hook.provider.set_screen(self)
             tools = self.agent.tools.list_tools()
             tool_names = [t.name for t in tools]
-            chat.write_line("*已加载 " + str(len(tools)) + " 个工具: " + ", ".join(tool_names) + "*")
-            chat.write_line("**AI 引擎就绪**")
+            chat.write_line("*已加载 {} 个工具: {}*".format(len(tools), ", ".join(tool_names)))
 
             # Refresh skills & macros
             skills = self._list_skills()
             macros = self._list_macros()
             self.query_one(SkillsPanel).reload_list(skills=skills, macros=macros)
         except Exception as e:
-            chat.write_line("**Agent 初始化失败: " + str(e) + "**")
-            chat.write_line("*请设置 API Key 后重启*")
+            chat.write_line("*初始化失败，请检查 API Key 后重启*")
         chat.write_line("")
 
     async def _verify_host_key(self, host: str, fingerprint: str, key_type: str) -> bool:
@@ -186,7 +182,7 @@ class MainScreen(Screen):
 
         chat = self.query_one(ChatPanel)
         chat.write_line("")
-        chat.write_line("**>** " + text)
+        chat.write_line("> " + text)
 
         # Switch to chat tab on submission
         self.query_one("#main-tabs", TabbedContent).active = "tab-chat"
@@ -217,51 +213,77 @@ class MainScreen(Screen):
                     content = event.data.get("content", "")
                     if first_text:
                         chat.write_line("")
-                        chat.write_line("**AI:** ")
-                        chat.append_text(content)
                         first_text = False
-                    else:
-                        chat.append_text(content)
+                    chat.append_text(content)
                 elif event.type == "tool_start":
                     first_text = True
-                    name = event.data.get("tool_name", "")
                     args = event.data.get("args", {})
-                    node = args.get("node", "-")
-                    cmd = str(args.get("command", ""))[:60]
-                    chat.write_line("*> 执行 {}  {}*".format(name, cmd))
-                    self._last_audit_time = datetime.datetime.now().strftime("%H:%M:%S")
-                    self._last_audit_node = node
-                    self._last_audit_cmd = cmd
+                    self._tool_name = event.data.get("tool_name", "")
+                    self._tool_node = args.get("node", "-")
+                    self._tool_cmd = str(args.get("command", ""))[:80]
+                    self._tool_time = datetime.datetime.now().strftime("%H:%M:%S")
                 elif event.type == "tool_end":
                     first_text = True
-                    name = event.data.get("tool_name", "")
-                    output = str(event.data.get("output", ""))[:200]
-                    ok_str = str(event.data.get("output", {}))
-                    result = "ok" if '"ok"=True' in ok_str or "'ok': True" in ok_str else "done"
-                    chat.write_line("*< {} 完成*".format(name))
+                    name = getattr(self, "_tool_name", "")
+                    node = getattr(self, "_tool_node", "-")
+                    cmd = getattr(self, "_tool_cmd", "")
+                    output = event.data.get("output", {})
+                    self._render_tool_result(chat, name, node, cmd, output)
+                    result = "ok" if isinstance(output, dict) and output.get("ok") else "done"
                     audit.add_entry({
-                        "time": getattr(self, "_last_audit_time", ""),
-                        "node": getattr(self, "_last_audit_node", "-"),
-                        "command": getattr(self, "_last_audit_cmd", name)[:60],
+                        "time": getattr(self, "_tool_time", ""),
+                        "node": node,
+                        "command": cmd or name,
                         "result": result,
                         "approved": "auto",
                     })
                 elif event.type == "error":
                     first_text = True
-                    msg = event.data.get("message", "未知错误")
-                    chat.write_line("**Error: " + msg + "**")
+                    chat.write_line("*操作未能完成，请重试*")
                     audit.add_entry({
-                        "time": getattr(self, "_last_audit_time", ""),
-                        "node": getattr(self, "_last_audit_node", "-"),
-                        "command": getattr(self, "_last_audit_cmd", "")[:60],
+                        "time": getattr(self, "_tool_time", ""),
+                        "node": getattr(self, "_tool_node", "-"),
+                        "command": getattr(self, "_tool_cmd", "")[:60],
                         "result": "error",
                         "approved": "blocked",
                     })
                 elif event.type == "done":
                     chat.write_line("")
-        except Exception as e:
-            chat.write_line("**执行出错: " + str(e) + "**")
+        except Exception:
+            chat.write_line("")
+            chat.write_line("*请求失败，请检查网络后重试*")
         chat.write_line("")
+
+    def _render_tool_result(self, chat, name: str, node: str, cmd: str, output) -> None:
+        """渲染紧凑的命令执行结果框"""
+        stdout = ""
+        ok = True
+        if isinstance(output, dict):
+            ok = output.get("ok", True)
+            stdout = output.get("stdout", "") or output.get("error", "")
+        else:
+            stdout = str(output)
+
+        lines = stdout.strip().split("\n")
+        folded = False
+        if len(lines) > 6:
+            lines = lines[:6]
+            folded = True
+
+        chat.write_line("")
+        chat.write_line("---")
+        header = "{} · `{}`".format(name, node) if node and node != "-" else name
+        if cmd:
+            header += "  `{}`".format(cmd)
+        status = " ✓" if ok else " ✗"
+        chat.write_line("**" + header + "**" + status)
+        if lines and stdout.strip():
+            chat.write_line("")
+            for line in lines:
+                chat.write_line("  " + line)
+            if folded:
+                chat.write_line("  *...(输出已折叠)*")
+        chat.write_line("---")
 
     async def _run_macro(self, text: str) -> None:
         """执行宏命令"""
