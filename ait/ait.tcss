@@ -18,40 +18,24 @@ ChatScreen {
     height: 1fr;
 }
 
-#chat-area {
+#chat-scroll {
     height: 1fr;
     border: none;
     padding: 0 1;
 }
 
-#chat-area .user-msg {
-    color: $success;
-}
-
-#chat-area .assistant-msg {
+#chat-area {
+    width: 1fr;
+    height: auto;
     color: $text;
-}
-
-#chat-area .tool-msg {
-    color: $secondary;
-}
-
-#chat-area .error-msg {
-    color: $error;
 }
 
 #input-bar {
     dock: bottom;
-    height: auto;
-    min-height: 3;
-    max-height: 10;
-    border: solid $primary;
-    margin: 0 1 1 1;
-    padding: 0 0 0 1;
-}
-
-#input-bar:focus {
+    height: 3;
     border: solid $accent;
+    margin: 0 1 1 1;
+    padding: 0 1;
 }
 
 Input {
@@ -62,33 +46,6 @@ Input {
 Input:focus {
     border: none;
 }
-
-
-ConfirmDialog {
-    align: center middle;
-}
-
-.confirm-box {
-    background: $surface;
-    border: thick $error;
-    padding: 1 2;
-    min-width: 50;
-}
-
-#confirm-title {
-    text-align: center;
-    padding-bottom: 1;
-}
-
-#confirm-buttons {
-    align: center middle;
-    padding-top: 1;
-}
-
-#confirm-buttons Button {
-    margin: 0 1;
-}
-
 
 #node-panel {
     width: 26;

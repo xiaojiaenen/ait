@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.screen import Screen
-from textual.widgets import RichLog, Input
-from textual.containers import Horizontal, Vertical
+from textual.widgets import Static, Input
+from textual.containers import Horizontal, Vertical, ScrollableContainer
 
 from ait.tui.widgets.node_panel import NodePanel
 
@@ -22,12 +22,16 @@ class ChatScreen(Screen):
         super().__init__()
         self.config_dir = config_dir
         self.agent = None
+        self._messages = []
 
     def compose(self):
         with Horizontal():
             yield NodePanel(config_dir=self.config_dir)
             with Vertical(id="chat-main"):
-                yield RichLog(id="chat-area", markup=True, wrap=True, highlight=True)
+                yield ScrollableContainer(
+                    Static(id="chat-area"),
+                    id="chat-scroll",
+                )
                 yield Input(id="input-bar", placeholder="输入运维操作...")
 
     def action_toggle_nodes(self) -> None:
@@ -35,24 +39,31 @@ class ChatScreen(Screen):
         panel.toggle()
 
     def on_mount(self) -> None:
-        chat_area = self.query_one("#chat-area", RichLog)
-        chat_area.write("[bold green]ait[/] [dim]AI 智能运维终端[/]")
-        chat_area.write("")
-        chat_area.write("[dim]正在初始化 AI 引擎...[/]")
-        chat_area.write("")
-        chat_area.write("用自然语言管理服务器，例如：")
-        chat_area.write("  [dim]> 查看所有节点的状态[/]")
-        chat_area.write("  [dim]> 重启前端 nginx[/]")
-        chat_area.write("")
-        chat_area.write("[dim]Ctrl+N 节点  Ctrl+S Skills  Ctrl+L 清屏[/]")
-        chat_area.write("")
+        self.write_line("[bold green]ait[/] [dim]AI 智能运维终端[/]")
+        self.write_line("")
+        self.write_line("[dim]正在初始化 AI 引擎...[/]")
+        self.write_line("")
+        self.write_line("用自然语言管理服务器，例如：")
+        self.write_line("  [dim]> 查看所有节点的状态[/]")
+        self.write_line("  [dim]> 重启前端 nginx[/]")
+        self.write_line("")
+        self.write_line("[dim]Ctrl+N 节点  Ctrl+S Skills  Ctrl+L 清屏[/]")
+        self.write_line("")
         self.query_one("#input-bar", Input).focus()
-
-        # 异步初始化 Agent
         self.run_worker(self._init_agent())
 
+    def write_line(self, text: str) -> None:
+        """向对话区追加一行"""
+        chat = self.query_one("#chat-area", Static)
+        current = chat.renderable or ""
+        if current:
+            chat.update(str(current) + "\n" + text)
+        else:
+            chat.update(text)
+        container = self.query_one("#chat-scroll", ScrollableContainer)
+        container.scroll_end(animate=False)
+
     async def _init_agent(self) -> None:
-        chat_area = self.query_one("#chat-area", RichLog)
         try:
             from ait.agent.ops_agent import OpsAgent
             self.agent = OpsAgent(config_dir=self.config_dir)
@@ -63,54 +74,52 @@ class ChatScreen(Screen):
             session = await self.agent.storage.load("default")
             if session and session.context.get_messages():
                 msg_count = len(session.context.get_messages())
-                chat_area.write(f"[dim]已恢复上次会话 ({msg_count} 条消息)[/]")
+                self.write_line(f"[dim]已恢复上次会话 ({msg_count} 条消息)[/]")
             tools = self.agent.tools.list_tools()
             tool_names = [t.name for t in tools]
-            chat_area.write("[dim]已加载 " + str(len(tools)) + " 个工具: " + ", ".join(tool_names) + "[/]")
-            chat_area.write("[dim green]AI 引擎就绪[/]")
+            self.write_line("[dim]已加载 " + str(len(tools)) + " 个工具: " + ", ".join(tool_names) + "[/]")
+            self.write_line("[dim green]AI 引擎就绪[/]")
         except Exception as e:
-            chat_area.write("[bold red]Agent 初始化失败: " + str(e) + "[/]")
-            chat_area.write("[dim]请设置 API Key 后重启[/]")
-        chat_area.write("")
+            self.write_line("[bold red]Agent 初始化失败: " + str(e) + "[/]")
+            self.write_line("[dim]请设置 API Key 后重启[/]")
+        self.write_line("")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
         if not text:
             return
-        chat_area = self.query_one("#chat-area", RichLog)
         input_bar = self.query_one("#input-bar", Input)
-        chat_area.write("\n[bold green]>[/] " + text)
+        self.write_line("\n[bold green]>[/] " + text)
         if self.agent is None:
-            chat_area.write("[bold red]Agent 未就绪，请等待初始化完成[/]")
-            chat_area.write("")
+            self.write_line("[bold red]Agent 未就绪，请等待初始化完成[/]")
+            self.write_line("")
             input_bar.clear()
             return
         self.run_worker(self._run_agent(text))
         input_bar.clear()
 
     async def _run_agent(self, text: str) -> None:
-        chat_area = self.query_one("#chat-area", RichLog)
         try:
             async for event in self.agent.stream(text):
                 if event.type == "text_delta":
                     content = event.data.get("content", "")
-                    chat_area.write(content)
+                    self.write_line(content)
                 elif event.type == "tool_start":
                     name = event.data.get("tool_name", "")
-                    chat_area.write("\n[dim]  > 执行 " + name + "...[/]")
+                    self.write_line("[dim]  > 执行 " + name + "...[/]")
                 elif event.type == "tool_end":
                     name = event.data.get("tool_name", "")
                     output = str(event.data.get("output", ""))[:100]
-                    chat_area.write("\n[dim]  < " + name + " 完成[/]")
+                    self.write_line("[dim]  < " + name + " 完成[/]")
                 elif event.type == "error":
                     msg = event.data.get("message", "未知错误")
-                    chat_area.write("\n[bold red]Error: " + msg + "[/]")
+                    self.write_line("[bold red]Error: " + msg + "[/]")
                 elif event.type == "done":
-                    chat_area.write("")
+                    self.write_line("")
         except Exception as e:
-            chat_area.write("\n[bold red]执行出错: " + str(e) + "[/]")
-        chat_area.write("")
+            self.write_line("[bold red]执行出错: " + str(e) + "[/]")
+        self.write_line("")
 
     def clear(self) -> None:
-        chat_area = self.query_one("#chat-area", RichLog)
-        chat_area.clear()
+        chat = self.query_one("#chat-area", Static)
+        chat.update("")
