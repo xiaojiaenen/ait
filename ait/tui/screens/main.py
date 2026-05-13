@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Vertical, Horizontal
 from textual.widgets import (
     TabbedContent,
     TabPane,
@@ -16,6 +16,7 @@ from textual.binding import Binding
 from textual.screen import Screen
 
 from ait.tui.panels.chat_panel import ChatPanel
+from ait.tui.panels.tool_panel import ToolPanel
 from ait.tui.panels.nodes_panel import NodesPanel
 from ait.tui.panels.metrics_panel import MetricsPanel
 from ait.tui.panels.skills_panel import SkillsPanel
@@ -49,7 +50,9 @@ class MainScreen(Screen):
         yield Header(show_clock=True)
         with TabbedContent(id="main-tabs"):
             with TabPane("对话", id="tab-chat"):
-                yield ChatPanel()
+                with Horizontal(id="chat-split"):
+                    yield ChatPanel()
+                    yield ToolPanel()
             with TabPane("节点", id="tab-nodes"):
                 yield NodesPanel(config_dir=self.config_dir)
             with TabPane("指标", id="tab-metrics"):
@@ -113,6 +116,7 @@ class MainScreen(Screen):
 
     def action_clear(self) -> None:
         self.query_one(ChatPanel).clear()
+        self.query_one(ToolPanel).clear_results()
 
     # -- Agent lifecycle --
 
@@ -182,13 +186,16 @@ class MainScreen(Screen):
 
         chat = self.query_one(ChatPanel)
         chat.write_line("")
-        chat.write_line("> " + text)
+        chat.write_line("---")
+        chat.write_line("**>** " + text)
+        chat.write_line("")
+        self.query_one(ToolPanel).clear_results()
 
         # Switch to chat tab on submission
         self.query_one("#main-tabs", TabbedContent).active = "tab-chat"
 
         if self.agent is None:
-            chat.write_line("**Agent 未就绪，请等待初始化完成**")
+            chat.write_line("*Agent 未就绪，请等待初始化完成*")
             chat.write_line("")
             input_bar.clear()
             return
@@ -204,6 +211,7 @@ class MainScreen(Screen):
 
     async def _run_agent(self, text: str) -> None:
         chat = self.query_one(ChatPanel)
+        tools = self.query_one(ToolPanel)
         audit = self.query_one(AuditPanel)
         import datetime
         try:
@@ -216,6 +224,7 @@ class MainScreen(Screen):
                         first_text = False
                     chat.append_text(content)
                 elif event.type == "tool_start":
+                    chat.flush()
                     first_text = True
                     args = event.data.get("args", {})
                     self._tool_name = event.data.get("tool_name", "")
@@ -223,12 +232,13 @@ class MainScreen(Screen):
                     self._tool_cmd = str(args.get("command", ""))[:80]
                     self._tool_time = datetime.datetime.now().strftime("%H:%M:%S")
                 elif event.type == "tool_end":
+                    chat.flush()
                     first_text = True
                     name = getattr(self, "_tool_name", "")
                     node = getattr(self, "_tool_node", "-")
                     cmd = getattr(self, "_tool_cmd", "")
                     output = event.data.get("output", {})
-                    self._render_tool_result(chat, name, node, cmd, output)
+                    tools.add_result(name, node, cmd, output)
                     result = "ok" if isinstance(output, dict) and output.get("ok") else "done"
                     audit.add_entry({
                         "time": getattr(self, "_tool_time", ""),
@@ -238,6 +248,7 @@ class MainScreen(Screen):
                         "approved": "auto",
                     })
                 elif event.type == "error":
+                    chat.flush()
                     first_text = True
                     chat.write_line("*操作未能完成，请重试*")
                     audit.add_entry({
@@ -248,42 +259,14 @@ class MainScreen(Screen):
                         "approved": "blocked",
                     })
                 elif event.type == "done":
+                    chat.flush()
                     chat.write_line("")
         except Exception:
+            chat.flush()
             chat.write_line("")
             chat.write_line("*请求失败，请检查网络后重试*")
+        chat.flush()
         chat.write_line("")
-
-    def _render_tool_result(self, chat, name: str, node: str, cmd: str, output) -> None:
-        """渲染紧凑的命令执行结果框"""
-        stdout = ""
-        ok = True
-        if isinstance(output, dict):
-            ok = output.get("ok", True)
-            stdout = output.get("stdout", "") or output.get("error", "")
-        else:
-            stdout = str(output)
-
-        lines = stdout.strip().split("\n")
-        folded = False
-        if len(lines) > 6:
-            lines = lines[:6]
-            folded = True
-
-        chat.write_line("")
-        chat.write_line("---")
-        header = "{} · `{}`".format(name, node) if node and node != "-" else name
-        if cmd:
-            header += "  `{}`".format(cmd)
-        status = " ✓" if ok else " ✗"
-        chat.write_line("**" + header + "**" + status)
-        if lines and stdout.strip():
-            chat.write_line("")
-            for line in lines:
-                chat.write_line("  " + line)
-            if folded:
-                chat.write_line("  *...(输出已折叠)*")
-        chat.write_line("---")
 
     async def _run_macro(self, text: str) -> None:
         """执行宏命令"""
@@ -349,5 +332,5 @@ class MainScreen(Screen):
             else:
                 health_map[node.name] = "offline"
 
-        self.query_one("MetricsPanel").update_metrics(metrics_data)
-        self.query_one("NodesPanel").update_status(health_map)
+        self.query_one(MetricsPanel).update_metrics(metrics_data)
+        self.query_one(NodesPanel).update_status(health_map)
