@@ -32,6 +32,11 @@ class ChatScreen(Screen):
         try:
             from ait.agent.ops_agent import OpsAgent
             self.agent = OpsAgent(config_dir=self.config_dir)
+            # 注入 TUI 引用到审批提供者
+            for hook in self.agent.agent._hooks._hooks:
+                from ait.security.tui_provider import TuiApprovalProvider
+                if isinstance(hook.provider, TuiApprovalProvider):
+                    hook.provider.set_screen(self)
             tools = self.agent.tools.list_tools()
             tool_names = [t.name for t in tools]
             chat_area.write("[dim]已加载 " + str(len(tools)) + " 个工具: " + ", ".join(tool_names) + "[/]")

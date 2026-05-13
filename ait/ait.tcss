@@ -62,3 +62,29 @@ Input {
 Input:focus {
     border: none;
 }
+
+
+ConfirmDialog {
+    align: center middle;
+}
+
+.confirm-box {
+    background: $surface;
+    border: thick $error;
+    padding: 1 2;
+    min-width: 50;
+}
+
+#confirm-title {
+    text-align: center;
+    padding-bottom: 1;
+}
+
+#confirm-buttons {
+    align: center middle;
+    padding-top: 1;
+}
+
+#confirm-buttons Button {
+    margin: 0 1;
+}

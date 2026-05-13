@@ -20,7 +20,7 @@ from wuwei import (
     ToolRegistry,
 )
 from wuwei.memory.context_compressor import LLMContextCompressor
-from wuwei.runtime import ApprovalPolicy, ConsoleApprovalProvider
+from ait.security.tui_provider import TuiApprovalProvider
 from wuwei.tools.builtin.skill_tools import register_skill_tools
 
 from ait.agent.prompts import OPS_SYSTEM_PROMPT
@@ -84,10 +84,8 @@ class OpsAgent:
                     keep_recent_turns=10,
                 ),
                 StorageHook(self.storage),
-                # P0.7 替换为 TuiApprovalProvider
                 HitlHook(
-                    provider=ConsoleApprovalProvider(),
-                    policy=ApprovalPolicy(),
+                    provider=TuiApprovalProvider(),
                 ),
                 ConsoleHook(),
             ],
