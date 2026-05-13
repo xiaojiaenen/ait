@@ -1,0 +1,112 @@
+"""OpsAgent - 运维 Agent 门面，组装 wuwei 组件"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from wuwei import (
+    Agent,
+    AgentSession,
+    ConsoleHook,
+    ContextCompressionHook,
+    FileStorage,
+    FileSystemSkillProvider,
+    HitlHook,
+    LLMGateway,
+    SkillHook,
+    SkillManager,
+    StorageHook,
+    ToolRegistry,
+)
+from wuwei.memory.context_compressor import LLMContextCompressor
+from wuwei.runtime import ApprovalPolicy, ConsoleApprovalProvider
+from wuwei.tools.builtin.skill_tools import register_skill_tools
+
+from ait.agent.prompts import OPS_SYSTEM_PROMPT
+
+
+class OpsAgent:
+    """运维 Agent 门面
+
+    职责：组装 wuwei 组件 + 注入运维工具和安全策略。
+    Agent 运行时、LLM 调用、工具执行、持久化全部交给 wuwei。
+    """
+
+    def __init__(self, config_dir: Path):
+        self.config_dir = config_dir
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+
+        # Skills 目录
+        skills_dir = config_dir / "skills"
+        skills_dir.mkdir(parents=True, exist_ok=True)
+
+        # 会话存储目录
+        sessions_dir = config_dir / "sessions"
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+
+        # LLM - 完全交给 wuwei
+        try:
+            self.llm = LLMGateway.from_env()
+        except Exception as e:
+            raise RuntimeError(
+                "无法初始化 LLM 网关。请设置环境变量，例如:\n"
+                "  export DEEPSEEK_API_KEY=your-key\n"
+                f"原始错误: {e}"
+            ) from e
+
+        # Skills
+        self.skill_provider = FileSystemSkillProvider(skill_path=str(skills_dir))
+        self.skill_manager = SkillManager([self.skill_provider])
+
+        # 工具
+        self.tools = ToolRegistry.from_builtin(["time"])
+        register_skill_tools(self.tools, self.skill_manager)
+
+        # 存储
+        self.storage = FileStorage(str(sessions_dir))
+
+        # Agent
+        self.agent = Agent(
+            llm=self.llm,
+            tools=self.tools,
+            hooks=[
+                SkillHook(),
+                ContextCompressionHook(
+                    compressor=LLMContextCompressor(self.llm),
+                    compress_after_turns=30,
+                    keep_recent_turns=10,
+                ),
+                StorageHook(self.storage),
+                # P0.7 替换为 TuiApprovalProvider
+                HitlHook(
+                    provider=ConsoleApprovalProvider(),
+                    policy=ApprovalPolicy(),
+                ),
+                ConsoleHook(),
+            ],
+            default_system_prompt=OPS_SYSTEM_PROMPT,
+            default_max_steps=10,
+        )
+
+    def register_tools(self, tools: list) -> None:
+        """注册额外的运维工具"""
+        for tool in tools:
+            from wuwei import Tool
+            if isinstance(tool, Tool):
+                self.tools.register(tool)
+            elif callable(tool):
+                self.tools.register_callable(tool)
+
+    async def run(self, user_input: str, session_id: str = "default") -> str:
+        """执行一次运维对话"""
+        session = await self.storage.load(session_id)
+        if session is None:
+            session = self.agent.create_session(session_id=session_id)
+
+        result = await self.agent.run(user_input, session=session)
+        return str(result)
+
+    def stream(self, user_input: str, session_id: str = "default"):
+        """流式执行运维对话（异步生成器）"""
+        return self.agent.stream_events(user_input, session_id=session_id)

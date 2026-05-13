@@ -29,7 +29,7 @@ class AitApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield ChatScreen()
+        yield ChatScreen(config_dir=self.config_dir)
         yield Footer()
 
     def action_clear(self) -> None:
