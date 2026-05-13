@@ -342,6 +342,25 @@ Static {
     color: #c9d1d9;
 }
 
+/* -- Markdown 代码块 -- */
+MarkdownFence {
+    background: #161b22;
+    border: tall #30363d;
+    margin: 1 0;
+}
+
+MarkdownFence > Label {
+    padding: 1 2;
+}
+
+/* -- Markdown 引用块（用户输入） -- */
+MarkdownBlockQuote {
+    background: #161b22;
+    border-left: outer #58a6ff;
+    margin: 1 0;
+    padding: 0 1;
+}
+
 /* -- 滚动条全局 -- */
 Scrollbar {
     scrollbar-color: #30363d;

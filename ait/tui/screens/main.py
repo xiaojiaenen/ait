@@ -72,14 +72,9 @@ class MainScreen(Screen):
 
     def _write_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
-        chat.write_line("# ait")
+        chat.write_line("# ait — AI 运维助手")
         chat.write_line("")
-        chat.write_line("*AI 运维助手*")
-        chat.write_line("")
-        chat.write_line("> 查看所有节点状态")
-        chat.write_line("> 重启 nginx 服务")
-        chat.write_line("")
-        chat.write_line("*`1-5` 面板  `↑↓` 历史  `Ctrl+L` 清屏*")
+        chat.write_line("`1-5` 面板  `↑↓` 历史  `Ctrl+L` 清屏")
 
     # -- Tab switching --
 
@@ -134,14 +129,11 @@ class MainScreen(Screen):
                 from ait.security.tui_provider import TuiApprovalProvider
                 if hasattr(hook, "provider") and isinstance(hook.provider, TuiApprovalProvider):
                     hook.provider.set_screen(self)
-            tools = self.agent.tools.list_tools()
-            tool_names = [t.name for t in tools]
-            chat.write_line("*已加载 {} 个工具: {}*".format(len(tools), ", ".join(tool_names)))
-
             # Refresh skills & macros
             skills = self._list_skills()
             macros = self._list_macros()
             self.query_one(SkillsPanel).reload_list(skills=skills, macros=macros)
+            chat.write_line("*AI 引擎就绪*")
         except Exception as e:
             chat.write_line("*初始化失败，请检查 API Key 后重启*")
         chat.write_line("")
@@ -186,8 +178,7 @@ class MainScreen(Screen):
 
         chat = self.query_one(ChatPanel)
         chat.write_line("")
-        chat.write_line("---")
-        chat.write_line("**>** " + text)
+        chat.write_line("> **You** " + text)
         chat.write_line("")
         self.query_one(ToolPanel).clear_results()
 
@@ -264,7 +255,7 @@ class MainScreen(Screen):
         except Exception:
             chat.flush()
             chat.write_line("")
-            chat.write_line("*请求失败，请检查网络后重试*")
+            chat.write_line("*请求失败，请检查网络或 API Key*")
         chat.flush()
         chat.write_line("")
 

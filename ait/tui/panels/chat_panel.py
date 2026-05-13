@@ -7,6 +7,23 @@ from textual.containers import Vertical
 from textual.widgets import Markdown
 
 
+def _make_md_parser():
+    """创建增强版 Markdown 解析器：表格 + 任务列表 + 脚注"""
+    from markdown_it import MarkdownIt
+    from mdit_py_plugins.tasklists import tasklists_plugin
+    from mdit_py_plugins.deflist import deflist_plugin
+    from mdit_py_plugins.footnote import footnote_plugin
+
+    parser = MarkdownIt("gfm-like")
+    parser.use(tasklists_plugin)
+    parser.use(deflist_plugin)
+    try:
+        parser.use(footnote_plugin)
+    except Exception:
+        pass
+    return parser
+
+
 class ChatPanel(Vertical):
     """对话展示面板"""
 
@@ -16,7 +33,7 @@ class ChatPanel(Vertical):
         self._last_flush = 0.0
 
     def compose(self):
-        yield Markdown("", id="chat-area")
+        yield Markdown("", id="chat-area", parser_factory=_make_md_parser)
 
     def write_line(self, text: str) -> None:
         """追加一行 Markdown 文本，立即刷新"""
