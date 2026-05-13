@@ -28,8 +28,8 @@ class ToolPanel(Vertical):
 
     def __init__(self):
         super().__init__(id="tool-panel")
-        self._entries: list[dict] = []  # 历史结果条目
-        self._running: dict[str, str] = {}  # call_id -> label
+        self._tp_entries: list[dict] = []  # 历史结果条目
+        self._tp_pending: dict[str, str] = {}  # call_id -> label
 
     def compose(self):
         yield Label("[bold]工具[/]", id="tool-panel-title")
@@ -45,7 +45,7 @@ class ToolPanel(Vertical):
             label += " [dim]{}[/]".format(cmd[:40])
         # 按 call_id 去重
         key = call_id or name
-        self._running[key] = label
+        self._tp_pending[key] = label
         self._render()
 
     def add_result(
@@ -55,26 +55,26 @@ class ToolPanel(Vertical):
         card = self._format_card(name, node, cmd, output)
         key = call_id or name
         # 移除对应的运行中项
-        self._running.pop(key, None)
+        self._tp_pending.pop(key, None)
         # 添加到历史条目
-        self._entries.append({
+        self._tp_entries.append({
             "name": name,
             "card": card,
             "call_id": key,
         })
         # 保持最多 20 条历史
-        if len(self._entries) > 20:
-            self._entries = self._entries[-20:]
+        if len(self._tp_entries) > 20:
+            self._tp_entries = self._tp_entries[-20:]
         self._render()
 
     def _render(self) -> None:
         """根据内部状态渲染整个面板"""
         parts = []
         # 历史结果
-        for entry in self._entries:
+        for entry in self._tp_entries:
             parts.append(entry["card"])
         # 正在运行的工具
-        for label in self._running.values():
+        for label in self._tp_pending.values():
             if parts:
                 parts.append("")
             parts.append("[dim yellow]⏳ {} ...[/]".format(label))
@@ -191,6 +191,6 @@ class ToolPanel(Vertical):
         ) + folded
 
     def clear_results(self) -> None:
-        self._entries.clear()
-        self._running.clear()
+        self._tp_entries.clear()
+        self._tp_pending.clear()
         self._render()
