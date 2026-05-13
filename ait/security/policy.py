@@ -56,12 +56,16 @@ class DangerousCommandPolicy(ApprovalPolicy):
         "add_node": ("confirm", "添加运维节点"),
     }
 
-    def requires_tool_approval(self, tool_call, *, session, task=None) -> bool:
-        """实现 wuwei ApprovalPolicy 接口"""
+    def requires_tool_approval(self, tool_call, *, session, task=None, tool=None) -> bool:
+        """实现 wuwei ApprovalPolicy 接口 — HitlHook 会传入 tool"""
+        import sys
         tool_name = tool_call.function.name
+        print("[POLICY] requires_tool_approval called: tool={}".format(tool_name),
+              file=sys.stderr, flush=True)
 
         # 工具级敏感操作检查
         if tool_name in self.SENSITIVE_TOOLS:
+            print("[POLICY] {} in SENSITIVE_TOOLS -> True".format(tool_name), file=sys.stderr)
             return True
 
         # exec_command 按命令内容匹配
@@ -70,4 +74,7 @@ class DangerousCommandPolicy(ApprovalPolicy):
 
         command = tool_call.function.arguments.get("command", "")
         level, _ = self.evaluate(command)
-        return level in ("confirm", "block")
+        result = level in ("confirm", "block")
+        print("[POLICY] exec_command '{}': level={}, result={}".format(
+            command[:40], level, result), file=sys.stderr)
+        return result

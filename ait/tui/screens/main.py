@@ -46,6 +46,8 @@ class MainScreen(Screen):
         self._command_history: list[str] = []
         self._history_index: int = -1
         self._saved_input: str = ""
+        self._suggest_index: int = 0
+        self._suggest_matches: list[str] = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
