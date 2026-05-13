@@ -99,26 +99,32 @@ class DangerousCommandPolicy(ApprovalPolicy):
 
     def requires_tool_approval(self, tool_call, *, session, task=None, tool=None) -> bool:
         """实现 wuwei ApprovalPolicy 接口"""
-        import sys
+        import datetime
+        from pathlib import Path
         tool_name = tool_call.function.name
+
+        log_path = Path.home() / ".ait" / "approval.log"
+        def _plog(msg):
+            try:
+                ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                with open(log_path, "a") as f:
+                    f.write(f"[{ts}] [POLICY] {msg}\n")
+            except Exception:
+                pass
 
         # 工具级敏感操作
         if tool_name in SENSITIVE_TOOLS:
-            print("[POLICY] {} in SENSITIVE_TOOLS -> True".format(tool_name), file=sys.stderr)
+            _plog(f"{tool_name} in SENSITIVE_TOOLS → needs_approval=True")
             return True
 
         # exec_command 按命令内容匹配
         if tool_name != "exec_command":
+            _plog(f"{tool_name} not exec_command → needs_approval=False")
             return False
 
         command = tool_call.function.arguments.get("command", "")
         level, reason = self.evaluate(command)
 
-        # block → 触发审批(provider 中会拒绝)
-        # confirm → 触发审批弹窗
-        # unknown → 触发审批弹窗
-        # auto → 放行
         result = level != "auto"
-        print("[POLICY] '{}': level={}, reason={}, needs_approval={}".format(
-            command[:50], level, reason, result), file=sys.stderr)
+        _plog(f"'{command[:80]}': level={level}, reason={reason}, needs_approval={result}")
         return result

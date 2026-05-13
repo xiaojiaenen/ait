@@ -1,8 +1,6 @@
 """工具执行结果面板 — 右侧栏，不影响主对话"""
 from __future__ import annotations
 
-import sys
-
 from textual.containers import Vertical
 from textual.widgets import Static, Label
 
@@ -26,71 +24,69 @@ TOOL_CN_NAMES = {
 
 
 class ToolPanel(Vertical):
-    """右侧工具执行结果面板"""
+    """右侧工具执行结果面板 — 内部状态管理，不使用 Static.renderable"""
 
     def __init__(self):
         super().__init__(id="tool-panel")
+        self._entries: list[dict] = []  # 历史结果条目
+        self._running: dict[str, str] = {}  # call_id -> label
 
     def compose(self):
         yield Label("[bold]工具[/]", id="tool-panel-title")
-        yield Static("[dim]工具执行结果将显示在此[/]", id="tool-results")
+        yield Static("", id="tool-results")
 
-    def start_tool(self, name: str, node: str, cmd: str) -> None:
-        """工具开始执行时显示的提示"""
+    def start_tool(self, name: str, node: str, cmd: str, call_id: str = "") -> None:
+        """工具开始执行 — 显示运行中指示"""
         cn_name = TOOL_CN_NAMES.get(name, name)
         label = cn_name
         if node and node != "-":
             label += " · {}".format(node)
         if cmd:
             label += " [dim]{}[/]".format(cmd[:40])
-        results = self.query_one("#tool-results", Static)
-        current = str(results.renderable) if results.renderable else ""
-        if current == "[dim]工具执行结果将显示在此[/]":
-            current = ""
-        hint = "[dim yellow]⏳ {} ...[/]".format(label)
-        if current:
-            results.update(current + "\n\n" + hint)
-        else:
-            results.update(hint)
+        # 按 call_id 去重
+        key = call_id or name
+        self._running[key] = label
+        self._render()
 
-    def add_result(self, name: str, node: str, cmd: str, output) -> None:
-        """添加一次工具执行的结果卡片"""
-        # Debug: print to stderr
-        print(f"[ToolPanel] add_result: name={name}, node={node}, cmd={cmd}, output_type={type(output).__name__}",
-              file=sys.stderr, flush=True)
-
-        results = self.query_one("#tool-results", Static)
-        current = str(results.renderable) if results.renderable else ""
-        if current == "[dim]工具执行结果将显示在此[/]":
-            current = ""
-
+    def add_result(
+        self, name: str, node: str, cmd: str, output, call_id: str = ""
+    ) -> None:
+        """添加工具执行结果 — 替换对应的运行中指示"""
         card = self._format_card(name, node, cmd, output)
-        print(f"[ToolPanel] card preview: {card[:120]}...", file=sys.stderr, flush=True)
+        key = call_id or name
+        # 移除对应的运行中项
+        self._running.pop(key, None)
+        # 添加到历史条目
+        self._entries.append({
+            "name": name,
+            "card": card,
+            "call_id": key,
+        })
+        # 保持最多 20 条历史
+        if len(self._entries) > 20:
+            self._entries = self._entries[-20:]
+        self._render()
 
-        if current and card:
-            # Replace the "running" hint if it exists
-            cn_name = TOOL_CN_NAMES.get(name, name)
-            running_hint = "[dim yellow]⏳ {} ".format(cn_name)
-            if running_hint in current:
-                # Replace the running line with the actual card
-                lines = current.split("\n\n")
-                new_lines = []
-                replaced = False
-                for line in lines:
-                    if running_hint in line and not replaced:
-                        new_lines.append(card)
-                        replaced = True
-                    else:
-                        new_lines.append(line)
-                if not replaced:
-                    new_lines.append(card)
-                results.update("\n\n".join(new_lines))
-            else:
-                results.update(current + "\n\n" + card)
-        elif card:
-            results.update(card)
+    def _render(self) -> None:
+        """根据内部状态渲染整个面板"""
+        parts = []
+        # 历史结果
+        for entry in self._entries:
+            parts.append(entry["card"])
+        # 正在运行的工具
+        for label in self._running.values():
+            if parts:
+                parts.append("")
+            parts.append("[dim yellow]⏳ {} ...[/]".format(label))
+
+        if not parts:
+            text = "[dim]工具执行结果将显示在此[/]"
+        else:
+            text = "\n\n".join(parts)
 
         try:
+            results = self.query_one("#tool-results", Static)
+            results.update(text)
             results.scroll_end(animate=False)
         except Exception:
             pass
@@ -105,7 +101,6 @@ class ToolPanel(Vertical):
         stdout = ""
 
         if isinstance(output, str):
-            # 尝试解析为 JSON（工具错误/拒绝消息的格式）
             try:
                 parsed = json.loads(output)
                 if isinstance(parsed, dict):
@@ -120,7 +115,6 @@ class ToolPanel(Vertical):
             tool_executed = output.get("tool_executed", True)
             if not ok and not tool_executed:
                 rejected = True
-            # 优先取 stdout
             if output.get("stdout"):
                 stdout = output["stdout"]
             elif output.get("stderr"):
@@ -134,7 +128,6 @@ class ToolPanel(Vertical):
             elif output.get("instruction"):
                 stdout = output["instruction"]
             elif not stdout:
-                # 生成摘要
                 parts = []
                 for k, v in output.items():
                     if k in ("ok", "exit_code", "duration_ms", "stdout", "stderr",
@@ -156,7 +149,6 @@ class ToolPanel(Vertical):
                 if parts:
                     stdout = "  ".join(parts)
         elif isinstance(output, list):
-            # list_nodes 等返回列表的工具
             if len(output) <= 8:
                 names = [n.get("name", str(n)) if isinstance(n, dict) else str(n) for n in output]
                 stdout = "找到 {} 个节点:\n{}".format(len(output), "\n".join("- " + n for n in names))
@@ -168,7 +160,6 @@ class ToolPanel(Vertical):
         elif output is not None:
             stdout = str(output)[:500]
 
-        # 转义 Rich 标记符号
         stdout = rich_escape(stdout)
 
         lines = stdout.strip().split("\n")
@@ -200,4 +191,6 @@ class ToolPanel(Vertical):
         ) + folded
 
     def clear_results(self) -> None:
-        self.query_one("#tool-results", Static).update("[dim]工具执行结果将显示在此[/]")
+        self._entries.clear()
+        self._running.clear()
+        self._render()

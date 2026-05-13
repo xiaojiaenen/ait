@@ -2,11 +2,26 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import sys
+from pathlib import Path
 
 from wuwei.runtime.hitl import ApprovalDecision, ApprovalProvider, ApprovalRequest
 
 from ait.security.policy import DangerousCommandPolicy
+
+LOG_PATH = Path.home() / ".ait" / "approval.log"
+
+
+def _log(msg: str) -> None:
+    """追加写入审批日志"""
+    try:
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        with open(LOG_PATH, "a") as f:
+            f.write(f"[{ts}] {msg}\n")
+    except Exception:
+        pass
 
 
 class TuiApprovalProvider(ApprovalProvider):
@@ -21,15 +36,13 @@ class TuiApprovalProvider(ApprovalProvider):
 
     def set_screen(self, screen):
         self.screen = screen
-        print("[HITL] screen set: {}".format(type(screen).__name__),
-              file=sys.stderr, flush=True)
+        _log(f"screen set: {type(screen).__name__}")
 
     async def request_approval(self, request: ApprovalRequest) -> ApprovalDecision:
         tool_name = request.payload.get("tool_name", "")
         arguments = request.payload.get("arguments", {})
 
-        print("[HITL] request_approval CALLED: tool={}".format(tool_name),
-              file=sys.stderr, flush=True)
+        _log(f"request_approval: tool={tool_name}, args={ {k: str(v)[:80] for k, v in arguments.items()} }")
 
         # 工具级敏感操作检查
         tool_level, tool_reason = self.policy.SENSITIVE_TOOLS.get(tool_name, (None, None))
@@ -38,13 +51,15 @@ class TuiApprovalProvider(ApprovalProvider):
             reason = tool_reason
             cache_key = f"{tool_name}:{node}"
             if cache_key in self._session_approved:
-                print("[HITL] cached approval for {}".format(cache_key), file=sys.stderr)
+                _log(f"cached approval: {cache_key} → approved")
                 return ApprovalDecision(status="approved")
             if self.screen is None:
-                print("[HITL] screen is None, rejecting", file=sys.stderr)
+                _log("screen is None → rejected")
                 return ApprovalDecision(status="rejected", reason="无法显示确认弹窗")
-            print("[HITL] showing confirm dialog for {}".format(tool_name), file=sys.stderr)
-            return await self._show_confirm(request, tool_name, node, reason, cache_key)
+            _log(f"showing confirm dialog for tool: {tool_name} node={node}")
+            decision = await self._show_confirm(request, tool_name, node, reason, cache_key)
+            _log(f"dialog result: status={decision.status}, reason={decision.reason}")
+            return decision
 
         # exec_command: 所有命令都弹窗确认（不再依赖 LLM）
         if tool_name == "exec_command":
@@ -52,30 +67,34 @@ class TuiApprovalProvider(ApprovalProvider):
             node = arguments.get("node", "")
 
             level, reason = self.policy.evaluate(command)
-            print("[HITL] exec_command: cmd={}, level={}, reason={}".format(
-                command[:50], level, reason), file=sys.stderr, flush=True)
+            _log(f"exec_command: cmd={command[:80]}, level={level}, reason={reason}")
 
             if level == "block":
+                _log(f"blocked: {reason} → rejected")
                 return ApprovalDecision(
                     status="rejected",
                     reason=f"禁止执行: {reason}"
                 )
 
-            # 安全命令自动放行
             if level == "auto":
+                _log(f"auto-approved (safe command) → approved")
                 return ApprovalDecision(status="approved")
 
-            # confirm 级别：弹窗
             cache_key = f"{reason}:{command[:50]}"
             if cache_key in self._session_approved:
+                _log(f"cached approval: {cache_key} → approved")
                 return ApprovalDecision(status="approved")
 
             if self.screen is None:
+                _log("screen is None → rejected")
                 return ApprovalDecision(status="rejected", reason="无法显示确认弹窗")
 
-            return await self._show_confirm(request, command, node, reason, cache_key)
+            decision = await self._show_confirm(request, command, node, reason, cache_key)
+            _log(f"dialog result: status={decision.status}, reason={decision.reason}")
+            return decision
 
         # 其他工具放行
+        _log(f"tool {tool_name} not in SENSITIVE_TOOLS and not exec_command → auto-approved")
         return ApprovalDecision(status="approved")
 
     async def _show_confirm(
@@ -85,23 +104,23 @@ class TuiApprovalProvider(ApprovalProvider):
         try:
             from ait.tui.widgets.confirm import show_confirm_dialog
 
-            print("[HITL] calling show_confirm_dialog...", file=sys.stderr, flush=True)
+            _log(f"_show_confirm: cmd={str(command)[:80]}, node={node}, reason={reason}")
             approved, remember = await show_confirm_dialog(
                 self.screen, command, node, reason
             )
-            print("[HITL] dialog result: approved={}, remember={}".format(
-                approved, remember), file=sys.stderr, flush=True)
+            _log(f"_show_confirm returned: approved={approved}, remember={remember}")
             if remember:
                 self._session_approved.add(cache_key)
+                _log(f"remembered cache_key={cache_key}")
             if approved:
                 return ApprovalDecision(status="approved")
             return ApprovalDecision(
                 status="rejected", reason="用户取消"
             )
         except Exception as e:
-            print("[HITL] dialog error: {}".format(e), file=sys.stderr, flush=True)
+            _log(f"dialog error: {e}")
             import traceback
-            traceback.print_exc(file=sys.stderr)
+            _log(traceback.format_exc())
             return ApprovalDecision(
                 status="rejected", reason=f"弹窗错误: {e}"
             )

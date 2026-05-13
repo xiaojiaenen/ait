@@ -157,9 +157,11 @@ class NodesPanel(Vertical):
 
     def _node_line(self, name: str, idx: int = -1) -> str:
         """渲染单行节点信息"""
-        from ait.nodes.manager import NodeManager
-        nm = NodeManager(db_path=self.config_dir / "nodes.db")
-        node = nm.get_node(name)
+        node = None
+        for n in self._node_items:
+            if n.name == name:
+                node = n
+                break
         if not node:
             return f"  {name}"
 

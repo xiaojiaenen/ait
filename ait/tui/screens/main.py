@@ -336,6 +336,8 @@ class MainScreen(Screen):
         import datetime
         try:
             first_text = True
+            self._seen_tool_starts: set[str] = set()
+            self._seen_tool_ends: set[str] = set()
             async for event in self.agent.stream(text):
                 if event.type == "text_delta":
                     content = event.data.get("content", "")
@@ -344,6 +346,12 @@ class MainScreen(Screen):
                         first_text = False
                     chat.append_text(content)
                 elif event.type == "tool_start":
+                    call_id = event.data.get("tool_call_id", "")
+                    # 去重：wuwei 会为同一个 tool call 发两次 tool_start
+                    if call_id and call_id in self._seen_tool_starts:
+                        continue
+                    if call_id:
+                        self._seen_tool_starts.add(call_id)
                     chat.flush()
                     first_text = True
                     args = event.data.get("args", {})
@@ -354,17 +362,24 @@ class MainScreen(Screen):
                     try:
                         tools.start_tool(self._tool_name,
                                          self._tool_node,
-                                         self._tool_cmd)
+                                         self._tool_cmd,
+                                         call_id)
                     except Exception:
                         pass
                 elif event.type == "tool_end":
+                    call_id = event.data.get("tool_call_id", "")
+                    # 去重
+                    if call_id and call_id in self._seen_tool_ends:
+                        continue
+                    if call_id:
+                        self._seen_tool_ends.add(call_id)
                     chat.flush()
                     first_text = True
                     name = getattr(self, "_tool_name", "")
                     node = getattr(self, "_tool_node", "-")
                     cmd = getattr(self, "_tool_cmd", "")
                     output = event.data.get("output", {})
-                    # 解析 JSON 字符串输出（工具拒绝/错误消息格式）
+                    # 解析 JSON 字符串输出
                     output_dict = output
                     if isinstance(output, str):
                         import json as _json
@@ -373,7 +388,7 @@ class MainScreen(Screen):
                         except (_json.JSONDecodeError, TypeError):
                             output_dict = {}
                     try:
-                        tools.add_result(name, node, cmd, output)
+                        tools.add_result(name, node, cmd, output, call_id)
                     except Exception:
                         pass
                     # 根据解析结果确定状态
@@ -386,6 +401,16 @@ class MainScreen(Screen):
                         if isinstance(output_dict.get("error"), dict):
                             reason = output_dict["error"].get("message", "")
                         chat.write_line("*操作已被拒绝* {}".format(reason))
+                        # 记录到审批日志
+                        try:
+                            from pathlib import Path as _Path
+                            import datetime as _dt
+                            log_path = _Path.home() / ".ait" / "approval.log"
+                            ts = _dt.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                            with open(log_path, "a") as f:
+                                f.write(f"[{ts}] [MAIN] tool rejected: {name}, reason={reason}\n")
+                        except Exception:
+                            pass
                     elif not ok:
                         result = "error"
                         approved = "auto"
