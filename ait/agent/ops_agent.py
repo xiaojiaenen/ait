@@ -24,6 +24,8 @@ from wuwei.runtime import ApprovalPolicy, ConsoleApprovalProvider
 from wuwei.tools.builtin.skill_tools import register_skill_tools
 
 from ait.agent.prompts import OPS_SYSTEM_PROMPT
+from ait.nodes.manager import NodeManager
+from ait.tools.ssh_tools import register_ssh_tools
 
 
 class OpsAgent:
@@ -45,6 +47,9 @@ class OpsAgent:
         sessions_dir = config_dir / "sessions"
         sessions_dir.mkdir(parents=True, exist_ok=True)
 
+        # 节点管理
+        self.node_manager = NodeManager(config_dir / "nodes.db")
+
         # LLM - 完全交给 wuwei
         try:
             self.llm = LLMGateway.from_env()
@@ -62,6 +67,7 @@ class OpsAgent:
         # 工具
         self.tools = ToolRegistry.from_builtin(["time"])
         register_skill_tools(self.tools, self.skill_manager)
+        register_ssh_tools(self.tools, self.node_manager)
 
         # 存储
         self.storage = FileStorage(str(sessions_dir))
