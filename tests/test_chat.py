@@ -1,39 +1,36 @@
-"""测试 ChatScreen 核心逻辑"""
-import asyncio
+"""测试核心组件"""
 import pytest
 
 
 class TestTextLogic:
-    """测试 write_line / append_text 文本拼接逻辑（不需要 DOM）"""
+    """测试 ChatPanel 文本拼接逻辑"""
 
     @pytest.fixture
-    def screen(self):
-        """创建一个未挂载的 ChatScreen，直接操作 _chat_text"""
-        from pathlib import Path
-        from ait.tui.screens.chat import ChatScreen
-        return ChatScreen(config_dir=Path("/tmp/ait_test"))
+    def panel(self):
+        from ait.tui.panels.chat_panel import ChatPanel
+        return ChatPanel()
 
-    def test_write_line_first(self, screen):
-        screen._chat_text = ""
-        screen._chat_text = self._write_line(screen._chat_text, "hello")
-        assert screen._chat_text == "hello"
+    def test_write_line_first(self, panel):
+        panel._current_text = ""
+        panel._current_text = self._write_line(panel._current_text, "hello")
+        assert panel._current_text == "hello"
 
-    def test_write_line_append(self, screen):
-        screen._chat_text = "hello"
-        screen._chat_text = self._write_line(screen._chat_text, "world")
-        assert screen._chat_text == "hello\nworld"
+    def test_write_line_append(self, panel):
+        panel._current_text = "hello"
+        panel._current_text = self._write_line(panel._current_text, "world")
+        assert panel._current_text == "hello\nworld"
 
-    def test_append_text_first(self, screen):
-        screen._chat_text = ""
-        screen._chat_text = self._append_text(screen._chat_text, "hello")
-        assert screen._chat_text == "hello"
+    def test_append_text_first(self, panel):
+        panel._current_text = ""
+        panel._current_text = self._append_text(panel._current_text, "hello")
+        assert panel._current_text == "hello"
 
-    def test_append_text_continuous(self, screen):
-        screen._chat_text = "hello"
-        screen._chat_text = self._append_text(screen._chat_text, " world")
-        assert screen._chat_text == "hello world"
+    def test_append_text_continuous(self, panel):
+        panel._current_text = "hello"
+        panel._current_text = self._append_text(panel._current_text, " world")
+        assert panel._current_text == "hello world"
 
-    def test_mixed_sequence(self, screen):
+    def test_mixed_sequence(self, panel):
         """模拟流式输出: 第一段用 write_line，后续用 append_text"""
         text = "user input"
         text = self._write_line(text, "AI: first")
@@ -80,7 +77,21 @@ class TestHooksAccess:
         for hook in agent.agent.hooks._hooks:
             if hasattr(hook, "provider") and isinstance(hook.provider, TuiApprovalProvider):
                 found = True
-        assert found, "应找到 TuiApprovalProvider"
+        assert found, "应该找到 TuiApprovalProvider"
+
+
+class TestSessionIsolation:
+    """测试会话隔离"""
+
+    def test_session_id_is_timestamp_based(self):
+        import os
+        os.environ["DEEPSEEK_API_KEY"] = "test-key"
+
+        from pathlib import Path
+        from ait.agent.ops_agent import OpsAgent
+        agent = OpsAgent(config_dir=Path("/tmp/ait_test_session"))
+        assert agent._session_id.startswith("session_")
+        assert len(agent._session_id) > 8
 
 
 class TestAgentInit:

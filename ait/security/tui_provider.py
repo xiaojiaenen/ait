@@ -1,5 +1,4 @@
-"""TUI 审批提供者 - 在 Textual 界面中弹窗确认危险操作"""
-
+"""TUI 审批提供者 - 在 Textual 界面中弹窗确认危险操作，支持本次会话记住"""
 from __future__ import annotations
 
 import asyncio
@@ -17,6 +16,7 @@ class TuiApprovalProvider(ApprovalProvider):
         self._pending: dict[str, asyncio.Event] = {}
         self._decisions: dict[str, ApprovalDecision] = {}
         self.policy = DangerousCommandPolicy()
+        self._session_approved: set[str] = set()
 
     def set_screen(self, screen):
         self.screen = screen
@@ -38,24 +38,31 @@ class TuiApprovalProvider(ApprovalProvider):
         if level != "confirm":
             return ApprovalDecision(status="approved")
 
+        # 检查会话缓存
+        cache_key = f"{reason}:{command[:50]}"
+        if cache_key in self._session_approved:
+            return ApprovalDecision(status="approved")
+
         if self.screen is None:
             return ApprovalDecision(
                 status="rejected",
                 reason="无法显示确认弹窗"
             )
 
-        return await self._show_confirm(request, command, node, reason)
+        return await self._show_confirm(request, command, node, reason, cache_key)
 
     async def _show_confirm(
         self, request: ApprovalRequest,
-        command: str, node: str, reason: str
+        command: str, node: str, reason: str, cache_key: str
     ) -> ApprovalDecision:
         try:
             from ait.tui.widgets.confirm import show_confirm_dialog
 
-            approved = await show_confirm_dialog(
+            approved, remember = await show_confirm_dialog(
                 self.screen, command, node, reason
             )
+            if remember:
+                self._session_approved.add(cache_key)
             if approved:
                 return ApprovalDecision(status="approved")
             return ApprovalDecision(

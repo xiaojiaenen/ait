@@ -1,5 +1,4 @@
-"""危险操作确认弹窗"""
-
+"""危险操作确认弹窗 — 支持"本次会话记住" """
 from __future__ import annotations
 
 import asyncio
@@ -7,17 +6,18 @@ import asyncio
 from textual.app import ComposeResult
 from textual.containers import Center, Horizontal
 from textual.screen import ModalScreen
-from textual.widgets import Button, Label, Static
+from textual.widgets import Button, Label, Static, Checkbox
 
 
-class ConfirmDialog(ModalScreen[bool]):
-    """危险操作确认弹窗"""
+class ConfirmDialog(ModalScreen[tuple]):
+    """危险操作确认弹窗，返回 (approved: bool, remember: bool)"""
 
     def __init__(self, command: str, node: str, reason: str):
         super().__init__()
         self.command = command
         self.node = node
         self.reason = reason
+        self._remember = False
 
     def compose(self) -> ComposeResult:
         with Center():
@@ -27,30 +27,38 @@ class ConfirmDialog(ModalScreen[bool]):
                 yield Label(f"目标节点: [bold]{self.node}[/]")
                 yield Label(f"风险: [bold yellow]{self.reason}[/]")
                 yield Label("")
+                yield Checkbox("本次会话不再询问相同操作", id="chk-remember")
+                yield Label("")
                 with Horizontal(id="confirm-buttons"):
                     yield Button("确认执行 [Enter]", variant="error", id="btn-confirm")
                     yield Button("取消 [Esc]", variant="primary", id="btn-cancel")
 
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        if event.checkbox.id == "chk-remember":
+            self._remember = event.checkbox.value
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-confirm":
-            self.dismiss(True)
+            self.dismiss((True, self._remember))
         else:
-            self.dismiss(False)
+            self.dismiss((False, False))
 
     def on_key(self, event) -> None:
         if event.key == "escape":
-            self.dismiss(False)
+            self.dismiss((False, False))
         elif event.key == "enter":
-            self.dismiss(True)
+            self.dismiss((True, self._remember))
 
 
 async def show_confirm_dialog(
     screen, command: str, node: str, reason: str
-) -> bool:
+) -> tuple:
     """在 TUI 中显示确认弹窗并等待用户决策
 
-    返回 True 表示用户确认执行。
+    返回 (approved: bool, remember: bool)
     """
     dialog = ConfirmDialog(command, node, reason)
     result = await screen.app.push_screen_wait(dialog)
-    return result if isinstance(result, bool) else False
+    if isinstance(result, tuple) and len(result) == 2:
+        return result
+    return (False, False)

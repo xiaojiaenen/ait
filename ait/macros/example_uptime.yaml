@@ -1,0 +1,6 @@
+# 示例宏 — 放置到 ~/.ait/macros/ 目录下
+name: uptime_check
+description: 检查所有节点运行时间
+command: uptime
+target: all
+confirm: false

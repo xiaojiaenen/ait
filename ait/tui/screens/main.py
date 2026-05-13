@@ -1,0 +1,329 @@
+"""主屏幕 — Tab 布局 + Agent 生命周期 + 快捷键驱动"""
+from __future__ import annotations
+
+from pathlib import Path
+
+from textual.app import ComposeResult
+from textual.containers import Vertical
+from textual.widgets import (
+    TabbedContent,
+    TabPane,
+    Input,
+    Header,
+    Footer,
+)
+from textual.binding import Binding
+from textual.screen import Screen
+
+from ait.tui.panels.chat_panel import ChatPanel
+from ait.tui.panels.nodes_panel import NodesPanel
+from ait.tui.panels.metrics_panel import MetricsPanel
+from ait.tui.panels.skills_panel import SkillsPanel
+from ait.tui.panels.audit_panel import AuditPanel
+
+
+class MainScreen(Screen):
+    """运维主屏幕"""
+
+    BINDINGS = [
+        Binding("ctrl+c", "quit", "退出", show=False),
+        Binding("ctrl+l", "clear", "清屏"),
+        Binding("1", "switch_tab('chat')", "对话", show=False),
+        Binding("2", "switch_tab('nodes')", "节点", show=False),
+        Binding("3", "switch_tab('metrics')", "指标", show=False),
+        Binding("4", "switch_tab('skills')", "技能", show=False),
+        Binding("5", "switch_tab('audit')", "审计", show=False),
+        Binding("up", "history_up", "", show=False),
+        Binding("down", "history_down", "", show=False),
+    ]
+
+    def __init__(self, config_dir: Path):
+        super().__init__()
+        self.config_dir = config_dir
+        self.agent = None
+        self._command_history: list[str] = []
+        self._history_index: int = -1
+        self._saved_input: str = ""
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        with TabbedContent(id="main-tabs"):
+            with TabPane("对话", id="tab-chat"):
+                yield ChatPanel()
+            with TabPane("节点", id="tab-nodes"):
+                yield NodesPanel(config_dir=self.config_dir)
+            with TabPane("指标", id="tab-metrics"):
+                yield MetricsPanel()
+            with TabPane("技能", id="tab-skills"):
+                yield SkillsPanel()
+            with TabPane("审计", id="tab-audit"):
+                yield AuditPanel()
+        yield Input(id="input-bar", placeholder="输入运维操作... (/ 触发宏)")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._write_welcome()
+        self.query_one("#input-bar", Input).focus()
+        self.run_worker(self._init_agent())
+        self.set_interval(10, self._refresh_metrics)
+
+    def _write_welcome(self) -> None:
+        chat = self.query_one(ChatPanel)
+        chat.write_line("[bold green]ait[/] [dim]AI 智能运维终端[/]")
+        chat.write_line("")
+        chat.write_line("[dim]正在初始化 AI 引擎...[/]")
+        chat.write_line("")
+        chat.write_line("用自然语言管理服务器，例如：")
+        chat.write_line("  [dim]> 查看所有节点的状态[/]")
+        chat.write_line("  [dim]> 重启前端 nginx[/]")
+        chat.write_line("")
+        chat.write_line("[dim]1-5 切换面板  ↑↓ 历史  Ctrl+L 清屏[/]")
+        chat.write_line("")
+
+    # -- Tab switching --
+
+    def action_switch_tab(self, tab: str) -> None:
+        tabs = self.query_one("#main-tabs", TabbedContent)
+        tabs.active = f"tab-{tab}"
+
+    # -- Input history --
+
+    def action_history_up(self) -> None:
+        if not self._command_history:
+            return
+        focused = self.focused
+        if focused and isinstance(focused, Input):
+            if self._history_index == -1:
+                self._saved_input = focused.value
+            if self._history_index < len(self._command_history) - 1:
+                self._history_index += 1
+            idx = len(self._command_history) - 1 - self._history_index
+            focused.value = self._command_history[idx]
+            focused.action_end()
+
+    def action_history_down(self) -> None:
+        focused = self.focused
+        if focused and isinstance(focused, Input):
+            if self._history_index > 0:
+                self._history_index -= 1
+                idx = len(self._command_history) - 1 - self._history_index
+                focused.value = self._command_history[idx]
+            elif self._history_index == 0:
+                self._history_index = -1
+                focused.value = self._saved_input
+            focused.action_end()
+
+    def action_clear(self) -> None:
+        self.query_one(ChatPanel).clear()
+
+    # -- Agent lifecycle --
+
+    async def _init_agent(self) -> None:
+        chat = self.query_one(ChatPanel)
+        try:
+            from ait.agent.ops_agent import OpsAgent
+            self.agent = OpsAgent(config_dir=self.config_dir)
+
+            # 设置 SSH 主机密钥验证回调
+            self.agent.node_manager.set_screen(self)
+            self.agent.node_manager.set_host_key_callback(self._verify_host_key)
+
+            for hook in self.agent.agent.hooks._hooks:
+                from ait.security.tui_provider import TuiApprovalProvider
+                if hasattr(hook, "provider") and isinstance(hook.provider, TuiApprovalProvider):
+                    hook.provider.set_screen(self)
+            tools = self.agent.tools.list_tools()
+            tool_names = [t.name for t in tools]
+            chat.write_line("[dim]已加载 " + str(len(tools)) + " 个工具: " + ", ".join(tool_names) + "[/]")
+            chat.write_line("[dim green]AI 引擎就绪[/]")
+
+            # Refresh skills & macros
+            skills = self._list_skills()
+            macros = self._list_macros()
+            self.query_one(SkillsPanel).refresh(skills=skills, macros=macros)
+        except Exception as e:
+            chat.write_line("[bold red]Agent 初始化失败: " + str(e) + "[/]")
+            chat.write_line("[dim]请设置 API Key 后重启[/]")
+        chat.write_line("")
+
+    async def _verify_host_key(self, host: str, fingerprint: str, key_type: str) -> bool:
+        """SSH 主机密钥验证回调 — 在 TUI 中弹窗确认"""
+        from ait.tui.widgets.host_key_dialog import HostKeyConfirmDialog
+        dialog = HostKeyConfirmDialog(host, fingerprint, key_type)
+        result = await self.app.push_screen_wait(dialog)
+        return result if isinstance(result, bool) else False
+
+    def _list_skills(self) -> list[dict]:
+        """列出可用技能"""
+        if self.agent is None:
+            return []
+        try:
+            skills = self.agent.skill_manager.list_skills()
+            return [{"name": s.name, "description": s.description} for s in skills]
+        except Exception:
+            return []
+
+    def _list_macros(self) -> list[dict]:
+        """列出可用宏"""
+        try:
+            from ait.macros.manager import MacroManager
+            manager = MacroManager(self.config_dir / "macros")
+            return [
+                {"name": m.name, "description": m.description}
+                for m in manager.list_all()
+            ]
+        except Exception:
+            return []
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        text = event.value.strip()
+        if not text:
+            return
+        input_bar = self.query_one("#input-bar", Input)
+        self._command_history.append(text)
+        self._history_index = -1
+        self._saved_input = ""
+
+        chat = self.query_one(ChatPanel)
+        chat.write_line("")
+        chat.write_line("[bold green]>[/] " + text)
+
+        # Switch to chat tab on submission
+        self.query_one("#main-tabs", TabbedContent).active = "tab-chat"
+
+        if self.agent is None:
+            chat.write_line("[bold red]Agent 未就绪，请等待初始化完成[/]")
+            chat.write_line("")
+            input_bar.clear()
+            return
+
+        # Check for macro prefix
+        if text.startswith("/"):
+            self.run_worker(self._run_macro(text))
+        else:
+            self.run_worker(self._run_agent(text))
+        input_bar.clear()
+
+    # -- Agent execution --
+
+    async def _run_agent(self, text: str) -> None:
+        chat = self.query_one(ChatPanel)
+        audit = self.query_one(AuditPanel)
+        import datetime
+        try:
+            first_text = True
+            async for event in self.agent.stream(text):
+                if event.type == "text_delta":
+                    content = event.data.get("content", "")
+                    if first_text:
+                        chat.write_line(content)
+                        first_text = False
+                    else:
+                        chat.append_text(content)
+                elif event.type == "tool_start":
+                    first_text = True
+                    name = event.data.get("tool_name", "")
+                    args = event.data.get("args", {})
+                    node = args.get("node", "-")
+                    cmd = str(args.get("command", ""))[:60]
+                    chat.write_line("[dim]  > 执行 {}  {}[/]".format(name, cmd))
+                    self._last_audit_time = datetime.datetime.now().strftime("%H:%M:%S")
+                    self._last_audit_node = node
+                    self._last_audit_cmd = cmd
+                elif event.type == "tool_end":
+                    first_text = True
+                    name = event.data.get("tool_name", "")
+                    output = str(event.data.get("output", ""))[:200]
+                    ok_str = str(event.data.get("output", {}))
+                    result = "ok" if '"ok"=True' in ok_str or "'ok': True" in ok_str else "done"
+                    chat.write_line("[dim]  < {} 完成[/]".format(name))
+                    audit.add_entry({
+                        "time": getattr(self, "_last_audit_time", ""),
+                        "node": getattr(self, "_last_audit_node", "-"),
+                        "command": getattr(self, "_last_audit_cmd", name)[:60],
+                        "result": result,
+                        "approved": "auto",
+                    })
+                elif event.type == "error":
+                    first_text = True
+                    msg = event.data.get("message", "未知错误")
+                    chat.write_line("[bold red]Error: " + msg + "[/]")
+                    audit.add_entry({
+                        "time": getattr(self, "_last_audit_time", ""),
+                        "node": getattr(self, "_last_audit_node", "-"),
+                        "command": getattr(self, "_last_audit_cmd", "")[:60],
+                        "result": "error",
+                        "approved": "blocked",
+                    })
+                elif event.type == "done":
+                    chat.write_line("")
+        except Exception as e:
+            chat.write_line("[bold red]执行出错: " + str(e) + "[/]")
+        chat.write_line("")
+
+    async def _run_macro(self, text: str) -> None:
+        """执行宏命令"""
+        chat = self.query_one(ChatPanel)
+        macro_name = text[1:].strip().split()[0]
+        try:
+            from ait.macros.manager import MacroManager
+            manager = MacroManager(self.config_dir / "macros")
+            macro = manager.resolve(macro_name)
+            if macro is None:
+                chat.write_line("[bold red]未知宏: " + macro_name + "[/]")
+                chat.write_line("[dim]可用宏: " + ", ".join(manager.list_names()) + "[/]")
+                chat.write_line("")
+                return
+            command = f"在 {macro.target or '指定节点'} 上执行: {macro.command}"
+            chat.write_line("[bold yellow]宏:[/] " + macro.description)
+            chat.write_line("")
+            await self._run_agent(command)
+        except Exception:
+            chat.write_line("[bold red]宏执行出错[/]")
+            chat.write_line("")
+
+    def _refresh_nodes(self) -> None:
+        """刷新节点面板"""
+        self.query_one(NodesPanel).refresh()
+
+    async def _refresh_metrics(self) -> None:
+        """定时刷新所有节点指标"""
+        if self.agent is None:
+            return
+        try:
+            from ait.health.metrics import MetricsCollector
+            collector = MetricsCollector(self.agent.node_manager)
+        except Exception:
+            return
+
+        nodes = self.agent.node_manager.list_nodes()
+        if not nodes:
+            return
+
+        # 并发采集
+        import asyncio
+        tasks = [collector.collect(n.name) for n in nodes]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        metrics_data = []
+        health_map = {}
+        for node, result in zip(nodes, results):
+            if isinstance(result, Exception):
+                health_map[node.name] = "offline"
+                continue
+            if result is not None and result.cpu_percent >= 0:
+                metrics_data.append({
+                    "node": node.name,
+                    "cpu": result.cpu_percent,
+                    "mem": result.mem_percent,
+                    "disk": result.disk_percent,
+                    "load1": result.load_1min,
+                    "load5": result.load_5min,
+                    "load15": result.load_15min,
+                })
+                health_map[node.name] = "online" if result.cpu_percent < 90 else "busy"
+            else:
+                health_map[node.name] = "offline"
+
+        self.query_one("MetricsPanel").update_metrics(metrics_data)
+        self.query_one("NodesPanel").update_status(health_map)

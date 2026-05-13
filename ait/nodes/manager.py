@@ -15,9 +15,18 @@ class NodeManager:
 
     def __init__(self, db_path: Path):
         self.db_path = db_path
-        self.pool = SSHConnectionPool()
+        config_dir = db_path.parent
+        self.pool = SSHConnectionPool(known_hosts_dir=config_dir)
         self._init_db()
         self._init_groups_db()
+
+    def set_host_key_callback(self, callback) -> None:
+        """设置主机密钥确认回调"""
+        self.pool.set_host_key_callback(callback)
+
+    def set_screen(self, screen) -> None:
+        """设置 TUI 屏幕引用"""
+        self.pool.set_screen(screen)
 
     def _init_db(self) -> None:
         db = sqlite3.connect(str(self.db_path))

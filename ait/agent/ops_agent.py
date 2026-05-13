@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import os
 from pathlib import Path
 
@@ -33,11 +34,13 @@ class OpsAgent:
 
     职责：组装 wuwei 组件 + 注入运维工具和安全策略。
     Agent 运行时、LLM 调用、工具执行、持久化全部交给 wuwei。
+    每次启动生成新会话 ID，不复用旧会话。
     """
 
     def __init__(self, config_dir: Path):
         self.config_dir = config_dir
         self.config_dir.mkdir(parents=True, exist_ok=True)
+        self._session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         # Skills 目录
         skills_dir = config_dir / "skills"
@@ -120,8 +123,9 @@ class OpsAgent:
             elif callable(tool):
                 self.tools.register_callable(tool)
 
-    async def run(self, user_input: str, session_id: str = "default") -> str:
+    async def run(self, user_input: str) -> str:
         """执行一次运维对话"""
+        session_id = self._session_id
         session = await self.storage.load(session_id)
         if session is None:
             session = self.agent.create_session(session_id=session_id)
@@ -129,6 +133,6 @@ class OpsAgent:
         result = await self.agent.run(user_input, session=session)
         return str(result)
 
-    def stream(self, user_input: str, session_id: str = "default"):
+    def stream(self, user_input: str):
         """流式执行运维对话（异步生成器）"""
-        return self.agent.stream_events(user_input, session_id=session_id)
+        return self.agent.stream_events(user_input, session_id=self._session_id)

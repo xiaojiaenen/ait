@@ -146,4 +146,17 @@ def register_ssh_tools(registry, node_manager: NodeManager):
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    @registry.tool(
+        name="get_metrics",
+        description="获取节点的实时系统指标 (CPU%/内存%/磁盘%/负载) 和健康状态。",
+    )
+    async def get_metrics(node: str) -> dict:
+        """获取节点实时指标"""
+        from ait.health.metrics import MetricsCollector
+        collector = MetricsCollector(node_manager)
+        metrics = await collector.collect(node)
+        if metrics is None:
+            return {"ok": False, "error": "采集失败"}
+        return metrics.model_dump()
+
 

@@ -14,21 +14,26 @@ Footer {
     height: 1;
 }
 
-ChatScreen {
+MainScreen {
     height: 1fr;
 }
 
-#chat-scroll {
+/* -- Tab 布局 -- */
+
+#main-tabs {
     height: 1fr;
-    border: none;
-    padding: 0 1;
 }
 
-#chat-area {
-    width: 1fr;
-    height: auto;
-    color: $text;
+TabPane {
+    height: 1fr;
+    padding: 0;
 }
+
+TabbedContent > ContentSwitcher {
+    height: 1fr;
+}
+
+/* -- 共用的输入栏 -- */
 
 #input-bar {
     dock: bottom;
@@ -38,42 +43,126 @@ ChatScreen {
     padding: 0 1;
 }
 
-Input {
-    background: transparent;
-    border: none;
-}
-
-Input:focus {
-    border: none;
-}
-
-#node-panel {
-    width: 26;
-    height: 1fr;
+#input-bar:focus {
     border: solid $primary;
-    padding: 0 1;
-    display: none;
 }
 
-#node-panel-title {
+/* -- 对话面板 -- */
+
+#chat-panel {
+    height: 1fr;
+}
+
+#chat-area {
+    height: 1fr;
+    padding: 0 1;
+}
+
+/* -- 节点面板 -- */
+
+#nodes-panel {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#nodes-title {
     text-align: center;
     padding: 1 0;
     background: $panel;
     width: 100%;
 }
 
+#node-search {
+    dock: top;
+    margin-bottom: 1;
+}
+
+#node-search:focus {
+    border: solid $accent;
+}
+
 #node-list {
     height: 1fr;
 }
 
-#node-panel-help {
+#nodes-help {
+    dock: bottom;
     padding: 1 0;
     text-align: center;
 }
 
-#chat-main {
-    width: 1fr;
+/* -- 指标面板 -- */
+
+#metrics-panel {
+    height: 1fr;
+    padding: 0 1;
 }
+
+#metrics-title {
+    text-align: center;
+    padding: 1 0;
+}
+
+#metrics-table {
+    height: 1fr;
+}
+
+/* -- 技能面板 -- */
+
+#skills-panel {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#skills-title {
+    text-align: center;
+    padding: 1 0;
+}
+
+#skills-list {
+    height: 1fr;
+}
+
+/* -- 审计面板 -- */
+
+#audit-panel {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#audit-title {
+    text-align: center;
+    padding: 1 0;
+}
+
+#audit-table {
+    height: 1fr;
+}
+
+/* -- 主机密钥确认弹窗 -- */
+
+.host-key-box {
+    background: $surface;
+    border: thick $warning;
+    padding: 1 2;
+    min-width: 55;
+}
+
+#hk-title {
+    text-align: center;
+    padding-bottom: 1;
+}
+
+#hk-buttons {
+    align: center middle;
+    padding-top: 1;
+}
+
+#hk-buttons Button {
+    margin: 0 1;
+}
+
+/* -- 确认弹窗 -- */
 
 ConfirmDialog {
     align: center middle;
