@@ -38,6 +38,7 @@ class NodeManager:
             "username TEXT DEFAULT 'root', "
             "auth_method TEXT DEFAULT 'key', "
             "key_path TEXT, "
+            "password TEXT, "
             "tags TEXT DEFAULT '[]', "
             "groups TEXT DEFAULT '[]', "
             "created_at TEXT DEFAULT (datetime('now'))"
@@ -45,14 +46,20 @@ class NodeManager:
         )
         db.execute(sql)
         db.commit()
+        # 兼容旧表：如果 password 列不存在则添加
+        try:
+            db.execute("ALTER TABLE nodes ADD COLUMN password TEXT")
+            db.commit()
+        except sqlite3.OperationalError:
+            pass
         db.close()
 
     def add_node(self, node: Node):
         db = sqlite3.connect(str(self.db_path))
         db.execute(
-            "INSERT OR REPLACE INTO nodes VALUES (?,?,?,?,?,?,?,?,datetime('now'))",
+            "INSERT OR REPLACE INTO nodes VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))",
             (node.name, node.host, node.port, node.user,
-             node.auth_method.value, node.key_path,
+             node.auth_method.value, node.key_path, node.password,
              json.dumps(node.tags), json.dumps(node.groups)),
         )
         db.commit()
@@ -79,6 +86,7 @@ class NodeManager:
             nodes.append(Node(
                 name=row[0], host=row[1], port=row[2], user=row[3],
                 auth_method=row[4], key_path=row[5],
+                password=row[8] if len(row) > 8 else None,
                 tags=node_tags, groups=json.loads(row[7]),
             ))
         return nodes
@@ -92,6 +100,7 @@ class NodeManager:
         return Node(
             name=row[0], host=row[1], port=row[2], user=row[3],
             auth_method=row[4], key_path=row[5],
+            password=row[8] if len(row) > 8 else None,
             tags=json.loads(row[6]), groups=json.loads(row[7]),
         )
 

@@ -123,4 +123,7 @@ class NodesPanel(Vertical):
         icons = {"online": "[green]●[/]", "offline": "[red]●[/]", "busy": "[yellow]●[/]"}
         icon = icons.get(status, "[red]●[/]")
 
-        return f"  {icon} {node.name} [dim]{node.host}[/]"
+        auth = node.auth_method.value if hasattr(node, 'auth_method') else "key"
+        auth_icon = "[dim italic]key[/]" if auth == "key" else "[dim italic]pwd[/]"
+
+        return f"  {icon} {node.name} {auth_icon} [dim]{node.host}[/]"

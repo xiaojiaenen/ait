@@ -46,16 +46,20 @@ def register_ssh_tools(registry, node_manager: NodeManager):
 
     @registry.tool(
         name="add_node",
-        description="添加新的运维节点。",
+        description="添加新的运维节点。支持 key 和 password 两种认证方式。password 认证时需提供 password 参数。",
     )
     def add_node(
         name: str, host: str, port: int = 22, user: str = "root",
+        auth_method: str = "key", key_path: str | None = None,
+        password: str | None = None,
         tags: list[str] | None = None, groups: list[str] | None = None,
     ) -> dict:
         """添加节点"""
-        from ait.nodes.models import Node
+        from ait.nodes.models import Node, AuthMethod
+        method = AuthMethod.KEY if auth_method == "key" else AuthMethod.PASSWORD
         node = Node(
             name=name, host=host, port=port, user=user,
+            auth_method=method, key_path=key_path, password=password,
             tags=tags or [], groups=groups or [],
         )
         node_manager.add_node(node)

@@ -1,139 +1,221 @@
+/* ═══════════════════════════════════════════════
+   ait — AI 智能运维终端 样式表
+   ═══════════════════════════════════════════════ */
+
+/* -- 全局 -- */
 Screen {
-    background: $surface;
+    background: #0d1117;
+    color: #c9d1d9;
 }
 
+/* -- 顶栏 -- */
 Header {
-    background: $panel;
+    background: #161b22;
     dock: top;
     height: 1;
+    color: #58a6ff;
+    text-style: bold;
 }
 
+/* -- 底栏 -- */
 Footer {
-    background: $panel;
+    background: #161b22;
     dock: bottom;
     height: 1;
-}
-
-MainScreen {
-    height: 1fr;
+    color: #8b949e;
 }
 
 /* -- Tab 布局 -- */
-
 #main-tabs {
     height: 1fr;
+    background: #0d1117;
+}
+
+TabbedContent {
+    background: #0d1117;
+}
+
+TabbedContent > ContentSwitcher {
+    height: 1fr;
+    background: #0d1117;
 }
 
 TabPane {
     height: 1fr;
     padding: 0;
+    background: #0d1117;
 }
 
-TabbedContent > ContentSwitcher {
-    height: 1fr;
+Tabs {
+    background: #161b22;
+    border-bottom: hkey $primary;
 }
 
-/* -- 共用的输入栏 -- */
+Tab {
+    padding: 0 2;
+    color: #8b949e;
+}
 
+Tab.-active {
+    color: #58a6ff;
+    background: #1c2333;
+    text-style: bold;
+}
+
+Underline.-active {
+    background: #58a6ff;
+}
+
+/* -- 输入栏 -- */
 #input-bar {
     dock: bottom;
     height: 3;
-    border: solid $accent;
-    margin: 0 1 1 1;
+    border: tall #30363d;
+    margin: 1 1 1 1;
     padding: 0 1;
+    background: #161b22;
+    color: #c9d1d9;
 }
 
 #input-bar:focus {
-    border: solid $primary;
+    border: tall #58a6ff;
+}
+
+#input-bar:focus-within {
+    border: tall #58a6ff;
 }
 
 /* -- 对话面板 -- */
-
 #chat-panel {
     height: 1fr;
+    background: #0d1117;
 }
 
 #chat-area {
     height: 1fr;
     padding: 0 1;
     overflow-y: auto;
+    background: #0d1117;
+    scrollbar-color: #30363d;
+    scrollbar-color-hover: #484f58;
+    scrollbar-color-active: #58a6ff;
 }
 
 /* -- 节点面板 -- */
-
 #nodes-panel {
     height: 1fr;
     padding: 0 1;
+    background: #0d1117;
 }
 
 #nodes-title {
     text-align: center;
     padding: 1 0;
-    background: $panel;
+    background: #1c2333;
+    color: #58a6ff;
+    text-style: bold;
     width: 100%;
 }
 
 #node-search {
     dock: top;
     margin-bottom: 1;
+    border: tall #30363d;
+    background: #161b22;
+    color: #c9d1d9;
 }
 
 #node-search:focus {
-    border: solid $accent;
+    border: tall #58a6ff;
 }
 
 #node-list {
     height: 1fr;
+    overflow-y: auto;
+    scrollbar-color: #30363d;
+    scrollbar-color-hover: #484f58;
+    scrollbar-color-active: #58a6ff;
 }
 
 #nodes-help {
     dock: bottom;
     padding: 1 0;
     text-align: center;
+    color: #484f58;
+    background: #161b22;
 }
 
 /* -- 指标面板 -- */
-
 #metrics-panel {
     height: 1fr;
     padding: 0 1;
+    background: #0d1117;
 }
 
 #metrics-title {
     text-align: center;
     padding: 1 0;
+    color: #58a6ff;
+    text-style: bold;
+    background: #1c2333;
 }
 
 #metrics-table {
     height: 1fr;
 }
 
-/* -- 技能面板 -- */
+DataTable {
+    background: #0d1117;
+    color: #c9d1d9;
+}
 
+DataTable > .datatable--header {
+    background: #1c2333;
+    color: #58a6ff;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #1c2333;
+}
+
+/* -- 技能面板 -- */
 #skills-panel {
     height: 1fr;
     padding: 0 1;
+    background: #0d1117;
 }
 
 #skills-title {
     text-align: center;
     padding: 1 0;
+    color: #58a6ff;
+    text-style: bold;
+    background: #1c2333;
 }
 
 #skills-list {
     height: 1fr;
+    overflow-y: auto;
+    background: #0d1117;
+    scrollbar-color: #30363d;
+    scrollbar-color-hover: #484f58;
+    scrollbar-color-active: #58a6ff;
 }
 
 /* -- 审计面板 -- */
-
 #audit-panel {
     height: 1fr;
     padding: 0 1;
+    background: #0d1117;
 }
 
 #audit-title {
     text-align: center;
     padding: 1 0;
+    color: #58a6ff;
+    text-style: bold;
+    background: #1c2333;
 }
 
 #audit-table {
@@ -141,10 +223,9 @@ TabbedContent > ContentSwitcher {
 }
 
 /* -- 主机密钥确认弹窗 -- */
-
 .host-key-box {
-    background: $surface;
-    border: thick $warning;
+    background: #161b22;
+    border: thick #d29922;
     padding: 1 2;
     min-width: 55;
 }
@@ -152,6 +233,7 @@ TabbedContent > ContentSwitcher {
 #hk-title {
     text-align: center;
     padding-bottom: 1;
+    color: #d29922;
 }
 
 #hk-buttons {
@@ -164,14 +246,13 @@ TabbedContent > ContentSwitcher {
 }
 
 /* -- 确认弹窗 -- */
-
 ConfirmDialog {
     align: center middle;
 }
 
 .confirm-box {
-    background: $surface;
-    border: thick $error;
+    background: #161b22;
+    border: thick #da3633;
     padding: 1 2;
     min-width: 50;
 }
@@ -179,6 +260,7 @@ ConfirmDialog {
 #confirm-title {
     text-align: center;
     padding-bottom: 1;
+    color: #da3633;
 }
 
 #confirm-buttons {
@@ -188,4 +270,51 @@ ConfirmDialog {
 
 #confirm-buttons Button {
     margin: 0 1;
+}
+
+/* -- 通用组件 -- */
+Button {
+    background: #21262d;
+    color: #c9d1d9;
+    border: tall #30363d;
+}
+
+Button:hover {
+    background: #30363d;
+    border: tall #58a6ff;
+}
+
+Button.-primary {
+    background: #1f6feb;
+    color: #ffffff;
+    border: tall #1f6feb;
+}
+
+Button.-primary:hover {
+    background: #388bfd;
+}
+
+Button.-error {
+    background: #da3633;
+    color: #ffffff;
+    border: tall #da3633;
+}
+
+Checkbox {
+    color: #c9d1d9;
+}
+
+Label {
+    color: #c9d1d9;
+}
+
+Static {
+    color: #c9d1d9;
+}
+
+/* -- 滚动条全局 -- */
+Scrollbar {
+    scrollbar-color: #30363d;
+    scrollbar-color-hover: #484f58;
+    scrollbar-color-active: #58a6ff;
 }
