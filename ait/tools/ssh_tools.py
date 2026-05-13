@@ -65,6 +65,15 @@ def register_ssh_tools(registry, node_manager: NodeManager):
         node_manager.add_node(node)
         return {"ok": True, "node": name}
     @registry.tool(
+        name="remove_node",
+        description="删除已配置的运维节点。此操作不可逆，需要用户确认。",
+    )
+    def remove_node(name: str) -> dict:
+        """删除节点"""
+        ok = node_manager.remove_node(name)
+        return {"ok": ok, "node": name}
+
+    @registry.tool(
         name="add_group",
         description="创建节点分组。",
     )

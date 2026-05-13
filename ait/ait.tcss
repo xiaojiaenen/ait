@@ -194,6 +194,14 @@ Underline.-active {
     height: 1fr;
 }
 
+#metrics-time {
+    dock: bottom;
+    padding: 1 0;
+    text-align: center;
+    color: #484f58;
+    background: #161b22;
+}
+
 DataTable {
     background: #0d1117;
     color: #c9d1d9;

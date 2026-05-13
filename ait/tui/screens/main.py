@@ -339,6 +339,12 @@ class MainScreen(Screen):
                     "load1": result.load_1min,
                     "load5": result.load_5min,
                     "load15": result.load_15min,
+                    "net_rx_kbps": result.net_rx_kbps,
+                    "net_tx_kbps": result.net_tx_kbps,
+                    "uptime_hours": result.uptime_hours,
+                    "cpu_cores": result.cpu_cores,
+                    "mem_used_gb": result.mem_used_gb,
+                    "mem_total_gb": result.mem_total_gb,
                 })
                 health_map[node.name] = "online" if result.cpu_percent < 90 else "busy"
             else:

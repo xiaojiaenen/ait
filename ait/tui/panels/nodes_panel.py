@@ -1,4 +1,4 @@
-"""节点管理面板 — 支持搜索、详情展开"""
+"""节点管理面板 — 支持搜索、选择、详情展开"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,13 +16,14 @@ class NodesPanel(Vertical):
         self._search_term = ""
         self._node_items = []
         self._group_items = []
+        self._selected_idx = -1
         self._expanded_node = None
 
     def compose(self):
         yield Label("[bold]节点管理[/]", id="nodes-title")
         yield Input(placeholder="/ 搜索节点...", id="node-search")
         yield Static("(加载中...)", id="node-list")
-        yield Label("[dim]Enter 详情  Esc 清除搜索[/]", id="nodes-help")
+        yield Label("[dim]↑↓ 选择  Enter 详情  Del 删除  / 搜索  Esc 退出[/]", id="nodes-help")
 
     def on_mount(self) -> None:
         self.query_one("#node-search", Input).display = False
@@ -31,26 +32,63 @@ class NodesPanel(Vertical):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "node-search":
             self._search_term = event.value.strip()
+            self._selected_idx = -1
+            self._expanded_node = None
             self._render_nodes()
 
     def on_key(self, event) -> None:
-        if event.key == "slash" and self.display:
+        if not self.display:
+            return
+        if event.key == "slash":
             search = self.query_one("#node-search", Input)
             search.display = True
             search.focus()
         elif event.key == "escape":
             self._search_term = ""
             self._expanded_node = None
+            self._selected_idx = -1
             search = self.query_one("#node-search", Input)
             search.value = ""
             search.display = False
             self._render_nodes()
-        elif event.key == "enter" and self.display:
+        elif event.key == "up":
+            if self._selected_idx > 0:
+                self._selected_idx -= 1
+                self._render_nodes()
+        elif event.key == "down":
+            if self._selected_idx < len(self._node_items) - 1:
+                self._selected_idx += 1
+                self._render_nodes()
+        elif event.key == "enter":
             self._toggle_detail()
+        elif event.key == "delete":
+            self._delete_selected()
 
     def _toggle_detail(self) -> None:
         """展开/收起当前选中节点"""
-        pass
+        if self._selected_idx < 0 or self._selected_idx >= len(self._node_items):
+            return
+        node = self._node_items[self._selected_idx]
+        if self._expanded_node == node.name:
+            self._expanded_node = None
+        else:
+            self._expanded_node = node.name
+        self._render_nodes()
+
+    def _delete_selected(self) -> None:
+        """删除选中节点"""
+        if self._selected_idx < 0 or self._selected_idx >= len(self._node_items):
+            return
+        node = self._node_items[self._selected_idx]
+        try:
+            from ait.nodes.manager import NodeManager
+            nm = NodeManager(db_path=self.config_dir / "nodes.db")
+            nm.remove_node(node.name)
+            self._expanded_node = None
+            self._selected_idx = max(-1, self._selected_idx - 1)
+            self.reload_nodes()
+        except Exception:
+            pass
 
     def reload_nodes(self) -> None:
         """重新加载节点列表"""
@@ -78,7 +116,6 @@ class NodesPanel(Vertical):
 
         lines = []
 
-        # 分组展示
         grouped_names = set()
         if self._group_items:
             for g in self._group_items:
@@ -90,10 +127,10 @@ class NodesPanel(Vertical):
                 grouped_names.update(g_nodes)
                 lines.append(f"[bold]{g['name']}[/]")
                 for node_name in g_nodes:
-                    lines.append(self._node_line(node_name))
+                    idx = self._node_index(node_name)
+                    lines.append(self._node_line(node_name, idx))
                 lines.append("")
 
-        # 未分组节点
         ungrouped = [n for n in self._node_items if n.name not in grouped_names]
         if self._search_term:
             ungrouped = [
@@ -107,17 +144,27 @@ class NodesPanel(Vertical):
             if self._group_items:
                 lines.append("[bold]未分组[/]")
             for n in ungrouped:
-                lines.append(self._node_line(n.name))
+                idx = self._node_index(n.name)
+                lines.append(self._node_line(n.name, idx))
 
         node_list.update("\n".join(lines) if lines else "[dim](无匹配)[/]")
 
-    def _node_line(self, name: str) -> str:
+    def _node_index(self, name: str) -> int:
+        for i, n in enumerate(self._node_items):
+            if n.name == name:
+                return i
+        return -1
+
+    def _node_line(self, name: str, idx: int = -1) -> str:
         """渲染单行节点信息"""
         from ait.nodes.manager import NodeManager
         nm = NodeManager(db_path=self.config_dir / "nodes.db")
         node = nm.get_node(name)
         if not node:
             return f"  {name}"
+
+        selected = idx >= 0 and idx == self._selected_idx
+        cursor = "[bold]>[/]" if selected else " "
 
         status = getattr(self, "_health", {}).get(name, "offline")
         icons = {"online": "[green]●[/]", "offline": "[red]●[/]", "busy": "[yellow]●[/]"}
@@ -126,4 +173,21 @@ class NodesPanel(Vertical):
         auth = node.auth_method.value if hasattr(node, 'auth_method') else "key"
         auth_icon = "[dim italic]key[/]" if auth == "key" else "[dim italic]pwd[/]"
 
-        return f"  {icon} {node.name} {auth_icon} [dim]{node.host}[/]"
+        line = f"{cursor} {icon} {node.name} {auth_icon} [dim]{node.host}[/]"
+        if selected:
+            line = "[bold]" + line + "[/]"
+
+        # 展开详情
+        if self._expanded_node == node.name:
+            detail_lines = [
+                f"    host: {node.host}:{node.port}",
+                f"    user: {node.user}",
+                f"    auth: {auth}",
+            ]
+            if node.tags:
+                detail_lines.append(f"    tags: {', '.join(node.tags)}")
+            if node.groups:
+                detail_lines.append(f"    groups: {', '.join(node.groups)}")
+            line += "\n" + "\n".join("[dim]" + d + "[/]" for d in detail_lines)
+
+        return line

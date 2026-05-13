@@ -15,7 +15,11 @@ class MetricsCollector:
         """采集单个节点指标"""
         result = await self._node_manager.exec_command(
             node_name,
-            "cat /proc/stat /proc/meminfo /proc/loadavg 2>/dev/null; df / | tail -1",
+            "cat /proc/stat /proc/meminfo /proc/loadavg /proc/uptime 2>/dev/null; "
+            "cat /proc/net/dev 2>/dev/null; "
+            "df / | tail -1; "
+            "cat /proc/cpuinfo 2>/dev/null | grep processor | wc -l; "
+            "free -m 2>/dev/null | tail -2 | head -1",
             timeout=10,
         )
         if not result.ok:
@@ -27,14 +31,12 @@ class MetricsCollector:
     def _parse(self, raw: str, node_name: str) -> NodeMetrics:
         """解析 /proc 输出"""
         metrics = NodeMetrics(node=node_name)
-
         lines = raw.split("\n")
 
-        # 解析 /proc/stat (第一行是 cpu 总)
+        # -- /proc/stat: CPU --
         for line in lines:
             if line.startswith("cpu "):
                 parts = line.split()
-                # cpu user nice system idle iowait irq softirq steal
                 user = int(parts[1])
                 nice = int(parts[2])
                 system = int(parts[3])
@@ -59,7 +61,7 @@ class MetricsCollector:
                 self._prev_cpu[node_name] = (idle_total, total)
                 break
 
-        # 解析 /proc/meminfo
+        # -- /proc/meminfo: 内存 --
         mem_total = 0
         mem_avail = 0
         for line in lines:
@@ -68,25 +70,62 @@ class MetricsCollector:
             elif line.startswith("MemAvailable:"):
                 mem_avail = self._extract_kb(line)
             if mem_total > 0 and mem_avail > 0:
-                metrics.mem_percent = round(
-                    (1 - mem_avail / mem_total) * 100, 1
-                )
+                metrics.mem_percent = round((1 - mem_avail / mem_total) * 100, 1)
+                metrics.mem_total_gb = round(mem_total / 1024 / 1024, 1)
+                metrics.mem_used_gb = round((mem_total - mem_avail) / 1024 / 1024, 1)
                 break
 
-        # 解析 /proc/loadavg
+        # -- /proc/loadavg: 负载 --
         for line in lines:
-            if "load average" in line.lower() or line.strip().count(" ") >= 2:
+            parts = line.strip().split()
+            if len(parts) == 4 and all(p.replace(".", "").isdigit() for p in parts[:3]):
+                metrics.load_1min = float(parts[0])
+                metrics.load_5min = float(parts[1])
+                metrics.load_15min = float(parts[2])
+                break
+
+        # -- /proc/uptime: 运行时间 --
+        for line in lines:
+            parts = line.strip().split()
+            if len(parts) == 2:
+                try:
+                    metrics.uptime_hours = round(float(parts[0]) / 3600, 1)
+                except ValueError:
+                    pass
+                break
+
+        # -- /proc/net/dev: 网卡流量 --
+        prev_net = getattr(self, "_prev_net", {})
+        prev_rx, prev_ts = prev_net.get(node_name, (0, 0, 0))
+        cur_rx = cur_tx = 0
+        for line in lines:
+            if ":" in line and "lo:" not in line:
                 parts = line.strip().split()
-                if len(parts) >= 3:
+                if len(parts) >= 10:
                     try:
-                        metrics.load_1min = float(parts[0])
-                        metrics.load_5min = float(parts[1])
-                        metrics.load_15min = float(parts[2])
-                        break
+                        cur_rx += int(parts[1])
+                        cur_tx += int(parts[9])
                     except ValueError:
                         continue
+        now_ts = int(raw[:50].count("\n") + 1)  # approximate
+        import time
+        now_ts = time.time()
+        if prev_ts > 0 and (now_ts - prev_ts) > 0:
+            metrics.net_rx_kbps = round((cur_rx - prev_rx) / (now_ts - prev_ts) / 1024, 1)
+            metrics.net_tx_kbps = round((cur_tx - prev_tx) / (now_ts - prev_ts) / 1024, 1)
+        if not hasattr(self, "_prev_net"):
+            self._prev_net = {}
+        self._prev_net[node_name] = (cur_rx, cur_tx, now_ts)
 
-        # 解析 df
+        # -- /proc/cpuinfo: CPU 核心数 --
+        core_count = 0
+        for line in lines:
+            if line.strip().isdigit():
+                core_count = max(core_count, int(line.strip()))
+        if core_count > 0:
+            metrics.cpu_cores = core_count
+
+        # -- df: 磁盘 --
         for line in lines:
             if line.strip().endswith("%"):
                 parts = line.split()

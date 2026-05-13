@@ -64,3 +64,9 @@ class NodeMetrics(BaseModel):
     load_1min: float = 0
     load_5min: float = 0
     load_15min: float = 0
+    net_rx_kbps: float = 0
+    net_tx_kbps: float = 0
+    uptime_hours: float = 0
+    cpu_cores: int = 0
+    mem_total_gb: float = 0
+    mem_used_gb: float = 0

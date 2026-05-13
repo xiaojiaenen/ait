@@ -24,6 +24,20 @@ class TuiApprovalProvider(ApprovalProvider):
     async def request_approval(self, request: ApprovalRequest) -> ApprovalDecision:
         tool_name = request.payload.get("tool_name", "")
         arguments = request.payload.get("arguments", {})
+
+        # 工具级敏感操作检查
+        tool_level, tool_reason = self.policy.SENSITIVE_TOOLS.get(tool_name, (None, None))
+        if tool_level == "confirm":
+            node = arguments.get("name", "") or arguments.get("node", "")
+            reason = tool_reason
+            cache_key = f"{tool_name}:{node}"
+            if cache_key in self._session_approved:
+                return ApprovalDecision(status="approved")
+            if self.screen is None:
+                return ApprovalDecision(status="rejected", reason="无法显示确认弹窗")
+            return await self._show_confirm(request, tool_name, node, reason, cache_key)
+
+        # exec_command 按命令内容匹配
         command = arguments.get("command", "")
         node = arguments.get("node", "")
 

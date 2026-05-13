@@ -50,9 +50,22 @@ class DangerousCommandPolicy(ApprovalPolicy):
                 return (level, description)
         return ("auto", "")
 
+    # 需要确认的工具操作（不依赖 shell 命令模式匹配）
+    SENSITIVE_TOOLS = {
+        "remove_node": ("confirm", "删除运维节点"),
+        "add_node": ("confirm", "添加运维节点"),
+    }
+
     def requires_tool_approval(self, tool_call, *, session, task=None) -> bool:
         """实现 wuwei ApprovalPolicy 接口"""
-        if tool_call.function.name != "exec_command":
+        tool_name = tool_call.function.name
+
+        # 工具级敏感操作检查
+        if tool_name in self.SENSITIVE_TOOLS:
+            return True
+
+        # exec_command 按命令内容匹配
+        if tool_name != "exec_command":
             return False
 
         command = tool_call.function.arguments.get("command", "")
