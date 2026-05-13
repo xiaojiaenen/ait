@@ -47,6 +47,8 @@ class ToolPanel(Vertical):
         self.query_one("#tool-results", Static).scroll_end(animate=False)
 
     def _format_card(self, name: str, node: str, cmd: str, output) -> str:
+        from rich.markup import escape as rich_escape
+
         cn_name = TOOL_CN_NAMES.get(name, name)
         ok = True
         stdout = ""
@@ -54,11 +56,9 @@ class ToolPanel(Vertical):
         if isinstance(output, dict):
             ok = output.get("ok", True)
             stdout = output.get("stdout", "") or output.get("error", "")
-            # 处理 batch_exec 的特殊格式
             if not stdout and "error" in output and isinstance(output.get("error"), str):
                 stdout = output["error"]
             if not stdout:
-                # 生成摘要
                 parts = []
                 for k, v in output.items():
                     if k in ("ok", "exit_code", "duration_ms"):
@@ -76,7 +76,9 @@ class ToolPanel(Vertical):
         else:
             stdout = str(output)
 
-        # 折叠长输出
+        # 转义 Rich 标记符号，防止输出中的 [ ] 破坏渲染
+        stdout = rich_escape(stdout)
+
         lines = stdout.strip().split("\n")
         folded = ""
         if len(lines) > 5:
@@ -90,7 +92,7 @@ class ToolPanel(Vertical):
         if node and node != "-":
             header += " · {}".format(node)
         if cmd:
-            header += "  [dim]{}[/]".format(cmd[:50])
+            header += "  [dim]{}[/]".format(rich_escape(cmd[:50]))
 
         body = "\n".join("  " + line for line in lines) if stdout.strip() else ""
 

@@ -229,33 +229,54 @@ class MainScreen(Screen):
                     node = getattr(self, "_tool_node", "-")
                     cmd = getattr(self, "_tool_cmd", "")
                     output = event.data.get("output", {})
-                    tools.add_result(name, node, cmd, output)
+                    try:
+                        tools.add_result(name, node, cmd, output)
+                    except Exception:
+                        pass
                     result = "ok" if isinstance(output, dict) and output.get("ok") else "done"
-                    audit.add_entry({
-                        "time": getattr(self, "_tool_time", ""),
-                        "node": node,
-                        "command": cmd or name,
-                        "result": result,
-                        "approved": "auto",
-                    })
+                    try:
+                        audit.add_entry({
+                            "time": getattr(self, "_tool_time", ""),
+                            "node": node,
+                            "command": cmd or name,
+                            "result": result,
+                            "approved": "auto",
+                        })
+                    except Exception:
+                        pass
                 elif event.type == "error":
                     chat.flush()
                     first_text = True
-                    chat.write_line("*操作未能完成，请重试*")
-                    audit.add_entry({
-                        "time": getattr(self, "_tool_time", ""),
-                        "node": getattr(self, "_tool_node", "-"),
-                        "command": getattr(self, "_tool_cmd", "")[:60],
-                        "result": "error",
-                        "approved": "blocked",
-                    })
+                    msg = event.data.get("message", "")
+                    chat.write_line("*操作未能完成*")
+                    try:
+                        audit.add_entry({
+                            "time": getattr(self, "_tool_time", ""),
+                            "node": getattr(self, "_tool_node", "-"),
+                            "command": getattr(self, "_tool_cmd", "")[:60],
+                            "result": "error",
+                            "approved": "blocked",
+                        })
+                    except Exception:
+                        pass
                 elif event.type == "done":
                     chat.flush()
                     chat.write_line("")
-        except Exception:
+        except Exception as e:
             chat.flush()
             chat.write_line("")
-            chat.write_line("*请求失败，请检查网络或 API Key*")
+            err_type = type(e).__name__
+            chat.write_line("*响应中断: {}*".format(err_type))
+            # 将详细错误写入日志文件
+            try:
+                log_path = self.config_dir / "error.log"
+                with open(log_path, "a") as f:
+                    import traceback
+                    f.write("\n[{}]\n".format(datetime.datetime.now()))
+                    traceback.print_exc(file=f)
+                    f.write("\n")
+            except Exception:
+                pass
         chat.flush()
         chat.write_line("")
 
