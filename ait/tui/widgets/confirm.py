@@ -73,9 +73,7 @@ class ConfirmDialog(ModalScreen[tuple]):
         if event.key == "escape":
             event.stop()
             self._resolve((False, False))
-        elif event.key == "enter":
-            event.stop()
-            self._resolve((True, self._remember))
+        # Enter 不在这里处理 — 让焦点所在的 Button 自然触发 Pressed 事件
 
 
 async def show_confirm_dialog(
