@@ -1,8 +1,8 @@
-"""对话面板 — Markdown 实时渲染"""
+"""对话面板 — Static 渲染，支持 Rich markup 和流式更新"""
 from __future__ import annotations
 
 from textual.containers import Vertical
-from textual.widgets import Markdown
+from textual.widgets import Static
 
 
 class ChatPanel(Vertical):
@@ -13,25 +13,21 @@ class ChatPanel(Vertical):
         self._current_text = ""
 
     def compose(self):
-        yield Markdown("", id="chat-area")
+        yield Static("", id="chat-area")
 
     def write_line(self, text: str) -> None:
-        """追加一行"""
-        markdown = self.query_one("#chat-area", Markdown)
+        """追加一行 Rich markup 文本"""
         if self._current_text:
             self._current_text += "\n" + text
         else:
             self._current_text = text
-        markdown.update(self._current_text)
-        markdown.scroll_end(animate=False)
+        self.query_one("#chat-area", Static).update(self._current_text)
 
     def append_text(self, text: str) -> None:
         """追加文本到当前行（流式输出）"""
-        markdown = self.query_one("#chat-area", Markdown)
         self._current_text += text
-        markdown.update(self._current_text)
-        markdown.scroll_end(animate=False)
+        self.query_one("#chat-area", Static).update(self._current_text)
 
     def clear(self) -> None:
         self._current_text = ""
-        self.query_one("#chat-area", Markdown).update("")
+        self.query_one("#chat-area", Static).update("")

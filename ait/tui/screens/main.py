@@ -216,7 +216,9 @@ class MainScreen(Screen):
                 if event.type == "text_delta":
                     content = event.data.get("content", "")
                     if first_text:
-                        chat.write_line(content)
+                        chat.write_line("")
+                        chat.write_line("[bold blue]AI:[/] ")
+                        chat.append_text(content)
                         first_text = False
                     else:
                         chat.append_text(content)

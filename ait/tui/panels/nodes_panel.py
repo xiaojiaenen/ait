@@ -31,7 +31,7 @@ class NodesPanel(Vertical):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "node-search":
             self._search_term = event.value.strip()
-            self._render()
+            self._render_nodes()
 
     def on_key(self, event) -> None:
         if event.key == "slash" and self.display:
@@ -44,7 +44,7 @@ class NodesPanel(Vertical):
             search = self.query_one("#node-search", Input)
             search.value = ""
             search.display = False
-            self._render()
+            self._render_nodes()
         elif event.key == "enter" and self.display:
             self._toggle_detail()
 
@@ -62,14 +62,14 @@ class NodesPanel(Vertical):
         except Exception:
             self._node_items = []
             self._group_items = []
-        self._render()
+        self._render_nodes()
 
     def update_status(self, health_map: dict[str, str]) -> None:
         """更新健康状态颜色: name -> 'online'|'offline'|'busy'"""
         self._health = health_map
-        self._render()
+        self._render_nodes()
 
-    def _render(self) -> None:
+    def _render_nodes(self) -> None:
         node_list = self.query_one("#node-list", Static)
 
         if not self._node_items and not self._group_items:
