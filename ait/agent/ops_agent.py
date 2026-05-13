@@ -21,6 +21,7 @@ from wuwei import (
     ToolRegistry,
 )
 from wuwei.memory.context_compressor import LLMContextCompressor
+from ait.security.policy import DangerousCommandPolicy
 from ait.security.tui_provider import TuiApprovalProvider
 from wuwei.tools.builtin.skill_tools import register_skill_tools
 
@@ -96,6 +97,12 @@ class OpsAgent:
         # TUI 审批提供者（延迟设置 screen）
         self.approval_provider = TuiApprovalProvider()
 
+        # HitlHook 必须传入我们的危险命令策略
+        self.hitl_hook = HitlHook(
+            provider=self.approval_provider,
+            policy=DangerousCommandPolicy(),
+        )
+
         # Agent
         self.agent = Agent(
             llm=self.llm,
@@ -108,9 +115,7 @@ class OpsAgent:
                     keep_recent_turns=10,
                 ),
                 StorageHook(self.storage),
-                HitlHook(
-                    provider=self.approval_provider,
-                ),
+                self.hitl_hook,
                 ConsoleHook(),
             ],
             default_system_prompt=OPS_SYSTEM_PROMPT,
