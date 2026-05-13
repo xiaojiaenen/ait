@@ -64,13 +64,21 @@ class ChatScreen(Screen):
         container = self.query_one("#chat-scroll", ScrollableContainer)
         container.scroll_end(animate=False)
 
+    def append_text(self, text: str) -> None:
+        """追加文本到当前行，不换行（用于流式输出）"""
+        chat = self.query_one("#chat-area", Static)
+        self._chat_text += text
+        chat.update(self._chat_text)
+        container = self.query_one("#chat-scroll", ScrollableContainer)
+        container.scroll_end(animate=False)
+
     async def _init_agent(self) -> None:
         try:
             from ait.agent.ops_agent import OpsAgent
             self.agent = OpsAgent(config_dir=self.config_dir)
-            for hook in self.agent.agent._hooks._hooks:
+            for hook in self.agent.agent.hooks._hooks:
                 from ait.security.tui_provider import TuiApprovalProvider
-                if isinstance(hook.provider, TuiApprovalProvider):
+                if hasattr(hook, "provider") and isinstance(hook.provider, TuiApprovalProvider):
                     hook.provider.set_screen(self)
             session = await self.agent.storage.load("default")
             if session and session.context.get_messages():
@@ -101,11 +109,17 @@ class ChatScreen(Screen):
 
     async def _run_agent(self, text: str) -> None:
         try:
+            first_text = True
             async for event in self.agent.stream(text):
                 if event.type == "text_delta":
                     content = event.data.get("content", "")
-                    self.write_line(content)
+                    if first_text:
+                        self.write_line(content)
+                        first_text = False
+                    else:
+                        self.append_text(content)
                 elif event.type == "tool_start":
+                    first_text = True
                     name = event.data.get("tool_name", "")
                     self.write_line("[dim]  > 执行 " + name + "...[/]")
                 elif event.type == "tool_end":
@@ -113,6 +127,7 @@ class ChatScreen(Screen):
                     output = str(event.data.get("output", ""))[:100]
                     self.write_line("[dim]  < " + name + " 完成[/]")
                 elif event.type == "error":
+                    first_text = True
                     msg = event.data.get("message", "未知错误")
                     self.write_line("[bold red]Error: " + msg + "[/]")
                 elif event.type == "done":
