@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from textual.screen import Screen
 from textual.widgets import Static, Input
 from textual.containers import Horizontal, Vertical, ScrollableContainer
 
 from ait.tui.widgets.node_panel import NodePanel
 
 
-class ChatScreen(Screen):
+class ChatScreen(Vertical):
     """运维对话主屏幕"""
 
     BINDINGS = [
