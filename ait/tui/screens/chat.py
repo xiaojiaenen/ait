@@ -28,6 +28,7 @@ class ChatScreen(Screen):
         chat_area.write("")
 
         # 初始化 Agent
+        # 初始化 Agent
         chat_area.write("[dim]正在初始化 AI 引擎...[/]")
         try:
             from ait.agent.ops_agent import OpsAgent
@@ -37,6 +38,12 @@ class ChatScreen(Screen):
                 from ait.security.tui_provider import TuiApprovalProvider
                 if isinstance(hook.provider, TuiApprovalProvider):
                     hook.provider.set_screen(self)
+
+            # 尝试恢复会话
+            session = await self.agent.storage.load("default")
+            if session and session.context.get_messages():
+                msg_count = len(session.context.get_messages())
+                chat_area.write(f"[dim]已恢复上次会话 ({msg_count} 条消息)[/]")
             tools = self.agent.tools.list_tools()
             tool_names = [t.name for t in tools]
             chat_area.write("[dim]已加载 " + str(len(tools)) + " 个工具: " + ", ".join(tool_names) + "[/]")
