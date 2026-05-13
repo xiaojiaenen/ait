@@ -69,15 +69,15 @@ class MainScreen(Screen):
 
     def _write_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
-        chat.write_line("[bold green]ait[/] [dim]AI 智能运维终端[/]")
+        chat.write_line("# ait — AI 智能运维终端")
         chat.write_line("")
-        chat.write_line("[dim]正在初始化 AI 引擎...[/]")
+        chat.write_line("*正在初始化 AI 引擎...*")
         chat.write_line("")
         chat.write_line("用自然语言管理服务器，例如：")
-        chat.write_line("  [dim]> 查看所有节点的状态[/]")
-        chat.write_line("  [dim]> 重启前端 nginx[/]")
+        chat.write_line("> 查看所有节点的状态")
+        chat.write_line("> 重启前端 nginx")
         chat.write_line("")
-        chat.write_line("[dim]1-5 切换面板  ↑↓ 历史  Ctrl+L 清屏[/]")
+        chat.write_line("*1-5 切换面板  ↑↓ 历史  Ctrl+L 清屏*")
         chat.write_line("")
 
     # -- Tab switching --
@@ -134,16 +134,16 @@ class MainScreen(Screen):
                     hook.provider.set_screen(self)
             tools = self.agent.tools.list_tools()
             tool_names = [t.name for t in tools]
-            chat.write_line("[dim]已加载 " + str(len(tools)) + " 个工具: " + ", ".join(tool_names) + "[/]")
-            chat.write_line("[dim green]AI 引擎就绪[/]")
+            chat.write_line("*已加载 " + str(len(tools)) + " 个工具: " + ", ".join(tool_names) + "*")
+            chat.write_line("**AI 引擎就绪**")
 
             # Refresh skills & macros
             skills = self._list_skills()
             macros = self._list_macros()
             self.query_one(SkillsPanel).reload_list(skills=skills, macros=macros)
         except Exception as e:
-            chat.write_line("[bold red]Agent 初始化失败: " + str(e) + "[/]")
-            chat.write_line("[dim]请设置 API Key 后重启[/]")
+            chat.write_line("**Agent 初始化失败: " + str(e) + "**")
+            chat.write_line("*请设置 API Key 后重启*")
         chat.write_line("")
 
     async def _verify_host_key(self, host: str, fingerprint: str, key_type: str) -> bool:
@@ -186,13 +186,13 @@ class MainScreen(Screen):
 
         chat = self.query_one(ChatPanel)
         chat.write_line("")
-        chat.write_line("[bold green]>[/] " + text)
+        chat.write_line("**>** " + text)
 
         # Switch to chat tab on submission
         self.query_one("#main-tabs", TabbedContent).active = "tab-chat"
 
         if self.agent is None:
-            chat.write_line("[bold red]Agent 未就绪，请等待初始化完成[/]")
+            chat.write_line("**Agent 未就绪，请等待初始化完成**")
             chat.write_line("")
             input_bar.clear()
             return
@@ -217,7 +217,7 @@ class MainScreen(Screen):
                     content = event.data.get("content", "")
                     if first_text:
                         chat.write_line("")
-                        chat.write_line("[bold blue]AI:[/] ")
+                        chat.write_line("**AI:** ")
                         chat.append_text(content)
                         first_text = False
                     else:
@@ -228,7 +228,7 @@ class MainScreen(Screen):
                     args = event.data.get("args", {})
                     node = args.get("node", "-")
                     cmd = str(args.get("command", ""))[:60]
-                    chat.write_line("[dim]  > 执行 {}  {}[/]".format(name, cmd))
+                    chat.write_line("*> 执行 {}  {}*".format(name, cmd))
                     self._last_audit_time = datetime.datetime.now().strftime("%H:%M:%S")
                     self._last_audit_node = node
                     self._last_audit_cmd = cmd
@@ -238,7 +238,7 @@ class MainScreen(Screen):
                     output = str(event.data.get("output", ""))[:200]
                     ok_str = str(event.data.get("output", {}))
                     result = "ok" if '"ok"=True' in ok_str or "'ok': True" in ok_str else "done"
-                    chat.write_line("[dim]  < {} 完成[/]".format(name))
+                    chat.write_line("*< {} 完成*".format(name))
                     audit.add_entry({
                         "time": getattr(self, "_last_audit_time", ""),
                         "node": getattr(self, "_last_audit_node", "-"),
@@ -249,7 +249,7 @@ class MainScreen(Screen):
                 elif event.type == "error":
                     first_text = True
                     msg = event.data.get("message", "未知错误")
-                    chat.write_line("[bold red]Error: " + msg + "[/]")
+                    chat.write_line("**Error: " + msg + "**")
                     audit.add_entry({
                         "time": getattr(self, "_last_audit_time", ""),
                         "node": getattr(self, "_last_audit_node", "-"),
@@ -260,7 +260,7 @@ class MainScreen(Screen):
                 elif event.type == "done":
                     chat.write_line("")
         except Exception as e:
-            chat.write_line("[bold red]执行出错: " + str(e) + "[/]")
+            chat.write_line("**执行出错: " + str(e) + "**")
         chat.write_line("")
 
     async def _run_macro(self, text: str) -> None:
@@ -272,16 +272,16 @@ class MainScreen(Screen):
             manager = MacroManager(self.config_dir / "macros")
             macro = manager.resolve(macro_name)
             if macro is None:
-                chat.write_line("[bold red]未知宏: " + macro_name + "[/]")
-                chat.write_line("[dim]可用宏: " + ", ".join(manager.list_names()) + "[/]")
+                chat.write_line("**未知宏: " + macro_name + "**")
+                chat.write_line("*可用宏: " + ", ".join(manager.list_names()) + "*")
                 chat.write_line("")
                 return
             command = f"在 {macro.target or '指定节点'} 上执行: {macro.command}"
-            chat.write_line("[bold yellow]宏:[/] " + macro.description)
+            chat.write_line("**宏:** " + macro.description)
             chat.write_line("")
             await self._run_agent(command)
         except Exception:
-            chat.write_line("[bold red]宏执行出错[/]")
+            chat.write_line("**宏执行出错**")
             chat.write_line("")
 
     def _refresh_nodes(self) -> None:
