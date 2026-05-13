@@ -15,7 +15,7 @@ class SkillsPanel(Vertical):
         yield Static("[bold]技能 & 宏[/]", id="skills-title")
         yield Static("(加载中...)", id="skills-list")
 
-    def refresh(self, skills: list[dict] | None = None, macros: list[dict] | None = None) -> None:
+    def reload_list(self, skills: list[dict] | None = None, macros: list[dict] | None = None) -> None:
         """刷新列表"""
         lines = []
         if macros:

@@ -140,7 +140,7 @@ class MainScreen(Screen):
             # Refresh skills & macros
             skills = self._list_skills()
             macros = self._list_macros()
-            self.query_one(SkillsPanel).refresh(skills=skills, macros=macros)
+            self.query_one(SkillsPanel).reload_list(skills=skills, macros=macros)
         except Exception as e:
             chat.write_line("[bold red]Agent 初始化失败: " + str(e) + "[/]")
             chat.write_line("[dim]请设置 API Key 后重启[/]")
@@ -284,7 +284,7 @@ class MainScreen(Screen):
 
     def _refresh_nodes(self) -> None:
         """刷新节点面板"""
-        self.query_one(NodesPanel).refresh()
+        self.query_one(NodesPanel).reload_nodes()
 
     async def _refresh_metrics(self) -> None:
         """定时刷新所有节点指标"""

@@ -14,8 +14,8 @@ class NodesPanel(Vertical):
         super().__init__(id="nodes-panel")
         self.config_dir = config_dir
         self._search_term = ""
-        self._nodes = []
-        self._groups = []
+        self._node_items = []
+        self._group_items = []
         self._expanded_node = None
 
     def compose(self):
@@ -26,7 +26,7 @@ class NodesPanel(Vertical):
 
     def on_mount(self) -> None:
         self.query_one("#node-search", Input).display = False
-        self.refresh()
+        self.reload_nodes()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "node-search":
@@ -52,16 +52,16 @@ class NodesPanel(Vertical):
         """展开/收起当前选中节点"""
         pass
 
-    def refresh(self) -> None:
+    def reload_nodes(self) -> None:
         """重新加载节点列表"""
         try:
             from ait.nodes.manager import NodeManager
             nm = NodeManager(db_path=self.config_dir / "nodes.db")
-            self._nodes = nm.list_nodes()
-            self._groups = nm.list_groups()
+            self._node_items = nm.list_nodes()
+            self._group_items = nm.list_groups()
         except Exception:
-            self._nodes = []
-            self._groups = []
+            self._node_items = []
+            self._group_items = []
         self._render()
 
     def update_status(self, health_map: dict[str, str]) -> None:
@@ -72,7 +72,7 @@ class NodesPanel(Vertical):
     def _render(self) -> None:
         node_list = self.query_one("#node-list", Static)
 
-        if not self._nodes and not self._groups:
+        if not self._node_items and not self._group_items:
             node_list.update("[dim](暂无节点)[/]")
             return
 
@@ -80,8 +80,8 @@ class NodesPanel(Vertical):
 
         # 分组展示
         grouped_names = set()
-        if self._groups:
-            for g in self._groups:
+        if self._group_items:
+            for g in self._group_items:
                 g_nodes = g.get("nodes", [])
                 if self._search_term:
                     g_nodes = [n for n in g_nodes if self._search_term.lower() in n.lower()]
@@ -94,7 +94,7 @@ class NodesPanel(Vertical):
                 lines.append("")
 
         # 未分组节点
-        ungrouped = [n for n in self._nodes if n.name not in grouped_names]
+        ungrouped = [n for n in self._node_items if n.name not in grouped_names]
         if self._search_term:
             ungrouped = [
                 n for n in ungrouped
@@ -104,7 +104,7 @@ class NodesPanel(Vertical):
             ]
 
         if ungrouped:
-            if self._groups:
+            if self._group_items:
                 lines.append("[bold]未分组[/]")
             for n in ungrouped:
                 lines.append(self._node_line(n.name))
