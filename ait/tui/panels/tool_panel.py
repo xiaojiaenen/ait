@@ -46,7 +46,7 @@ class ToolPanel(Vertical):
         # 按 call_id 去重
         key = call_id or name
         self._tp_pending[key] = label
-        self._render()
+        self._refresh_display()
 
     def add_result(
         self, name: str, node: str, cmd: str, output, call_id: str = ""
@@ -65,10 +65,10 @@ class ToolPanel(Vertical):
         # 保持最多 20 条历史
         if len(self._tp_entries) > 20:
             self._tp_entries = self._tp_entries[-20:]
-        self._render()
+        self._refresh_display()
 
-    def _render(self) -> None:
-        """根据内部状态渲染整个面板"""
+    def _refresh_display(self) -> None:
+        """根据内部状态刷新 Static widget 显示"""
         parts = []
         # 历史结果
         for entry in self._tp_entries:
@@ -193,4 +193,4 @@ class ToolPanel(Vertical):
     def clear_results(self) -> None:
         self._tp_entries.clear()
         self._tp_pending.clear()
-        self._render()
+        self._refresh_display()
