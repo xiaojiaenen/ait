@@ -96,26 +96,49 @@ class ToolPanel(Vertical):
             pass
 
     def _format_card(self, name: str, node: str, cmd: str, output) -> str:
+        import json
         from rich.markup import escape as rich_escape
 
         cn_name = TOOL_CN_NAMES.get(name, name)
         ok = True
+        rejected = False
         stdout = ""
+
+        if isinstance(output, str):
+            # 尝试解析为 JSON（工具错误/拒绝消息的格式）
+            try:
+                parsed = json.loads(output)
+                if isinstance(parsed, dict):
+                    output = parsed
+                else:
+                    stdout = output
+            except (json.JSONDecodeError, TypeError):
+                stdout = output
 
         if isinstance(output, dict):
             ok = output.get("ok", True)
+            tool_executed = output.get("tool_executed", True)
+            if not ok and not tool_executed:
+                rejected = True
             # 优先取 stdout
             if output.get("stdout"):
                 stdout = output["stdout"]
             elif output.get("stderr"):
                 stdout = output["stderr"]
             elif output.get("error"):
-                stdout = str(output["error"])
-            else:
+                err = output["error"]
+                if isinstance(err, dict):
+                    stdout = err.get("message", str(err))
+                else:
+                    stdout = str(err)
+            elif output.get("instruction"):
+                stdout = output["instruction"]
+            elif not stdout:
                 # 生成摘要
                 parts = []
                 for k, v in output.items():
-                    if k in ("ok", "exit_code", "duration_ms", "stdout", "stderr"):
+                    if k in ("ok", "exit_code", "duration_ms", "stdout", "stderr",
+                             "tool_executed", "instruction", "error"):
                         continue
                     if isinstance(v, dict):
                         parts.append("{}: {}".format(k, "✓" if v.get("ok") else "✗"))
@@ -142,8 +165,6 @@ class ToolPanel(Vertical):
                 stdout = "找到 {} 个节点:\n{}\n  ...(+{} 项)".format(
                     len(output), "\n".join("- " + n for n in names), len(output) - 6
                 )
-        elif isinstance(output, str):
-            stdout = output
         elif output is not None:
             stdout = str(output)[:500]
 
@@ -156,8 +177,15 @@ class ToolPanel(Vertical):
             lines = lines[:5]
             folded = "\n  ...(已折叠)"
 
-        status = "✓" if ok else "✗"
-        color = "green" if ok else "red"
+        if rejected:
+            status = "⊘"
+            color = "yellow"
+        elif ok:
+            status = "✓"
+            color = "green"
+        else:
+            status = "✗"
+            color = "red"
 
         header = cn_name
         if node and node != "-":

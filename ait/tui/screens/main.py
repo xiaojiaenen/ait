@@ -364,26 +364,52 @@ class MainScreen(Screen):
                     node = getattr(self, "_tool_node", "-")
                     cmd = getattr(self, "_tool_cmd", "")
                     output = event.data.get("output", {})
+                    # 解析 JSON 字符串输出（工具拒绝/错误消息格式）
+                    output_dict = output
+                    if isinstance(output, str):
+                        import json as _json
+                        try:
+                            output_dict = _json.loads(output)
+                        except (_json.JSONDecodeError, TypeError):
+                            output_dict = {}
                     try:
                         tools.add_result(name, node, cmd, output)
                     except Exception:
                         pass
-                    result = "ok" if isinstance(output, dict) and output.get("ok") else "done"
+                    # 根据解析结果确定状态
+                    ok = isinstance(output_dict, dict) and output_dict.get("ok") is not False
+                    tool_executed = isinstance(output_dict, dict) and output_dict.get("tool_executed") is not False
+                    if not tool_executed and isinstance(output_dict, dict) and "tool_executed" in output_dict:
+                        result = "rejected"
+                        approved = "rejected"
+                        reason = ""
+                        if isinstance(output_dict.get("error"), dict):
+                            reason = output_dict["error"].get("message", "")
+                        chat.write_line("*操作已被拒绝* {}".format(reason))
+                    elif not ok:
+                        result = "error"
+                        approved = "auto"
+                    else:
+                        result = "ok"
+                        approved = "auto"
                     try:
                         audit.add_entry({
                             "time": getattr(self, "_tool_time", ""),
                             "node": node,
                             "command": cmd or name,
                             "result": result,
-                            "approved": "auto",
+                            "approved": approved,
                         })
                     except Exception:
                         pass
-                elif event.type == "error":
+                elif event.type in ("error", "tool_error"):
                     chat.flush()
                     first_text = True
                     msg = event.data.get("message", "")
-                    chat.write_line("*操作未能完成*")
+                    if msg:
+                        chat.write_line("*操作未能完成: {}*".format(msg))
+                    else:
+                        chat.write_line("*操作未能完成*")
                     try:
                         audit.add_entry({
                             "time": getattr(self, "_tool_time", ""),
