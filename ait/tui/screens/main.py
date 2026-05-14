@@ -13,10 +13,8 @@ from textual.widgets import (
     Footer,
     Static,
 )
-from textual.widget import Widget
 from textual.binding import Binding
 from textual.screen import Screen
-from rich.text import Text
 
 from ait.tui.panels.chat_panel import ChatPanel
 from ait.tui.panels.tool_panel import ToolPanel
@@ -24,20 +22,6 @@ from ait.tui.panels.nodes_panel import NodesPanel
 from ait.tui.panels.metrics_panel import MetricsPanel
 from ait.tui.panels.skills_panel import SkillsPanel
 from ait.tui.panels.audit_panel import AuditPanel
-
-
-class GitHubLink(Widget):
-    """Header 右侧的 GitHub 跳转链接"""
-
-    ALLOW_SELECT = False
-
-    def render(self) -> Text:
-        style = "bold #58a6ff" if self.mouse_over else "dim #484f58"
-        return Text("ait", style=style)
-
-    def on_click(self) -> None:
-        import webbrowser
-        webbrowser.open("https://github.com/xiaojiaenen/ait")
 
 
 class MainScreen(Screen):
@@ -90,7 +74,6 @@ class MainScreen(Screen):
         self.query_one("#node-suggest", Static).display = False
         self.run_worker(self._init_agent())
         self.set_interval(10, self._refresh_metrics)
-        self.query_one(Header).mount(GitHubLink(id="github-link"))
 
     def _write_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
