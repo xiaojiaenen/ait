@@ -96,7 +96,6 @@ class SSHConnectionPool:
     def _append_known_host(self, node: Node, key) -> None:
         """将主机密钥追加到 known_hosts 文件"""
         import base64
-        import hashlib
 
         line = f"{node.host} {key.get_algorithm().__name__ if hasattr(key, 'get_algorithm') else 'ssh-rsa'} {base64.b64encode(key.get_public_bytes()).decode()}\n"
         with open(self._known_hosts_path, "a") as f:

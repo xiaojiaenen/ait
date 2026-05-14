@@ -100,7 +100,6 @@ class DangerousCommandPolicy(ApprovalPolicy):
     def requires_tool_approval(self, tool_call, *, session, task=None, tool=None) -> bool:
         """实现 wuwei ApprovalPolicy 接口"""
         import datetime
-        from pathlib import Path
         tool_name = tool_call.function.name
 
         from ait.config import get_log_path

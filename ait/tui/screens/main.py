@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import Vertical, Horizontal
+from textual.containers import Horizontal
 from textual.widgets import (
     TabbedContent,
     TabPane,
@@ -132,7 +132,7 @@ class MainScreen(Screen):
             macros = self._list_macros()
             self.query_one(SkillsPanel).reload_list(skills=skills, macros=macros)
             chat.write_line("*AI 引擎就绪*")
-        except Exception as e:
+        except Exception:
             chat.write_line("*初始化失败，请检查 API Key 后重启*")
         chat.write_line("")
 
@@ -403,7 +403,6 @@ class MainScreen(Screen):
                         chat.write_line("*操作已被拒绝* {}".format(reason))
                         # 记录到审批日志
                         try:
-                            from pathlib import Path as _Path
                             import datetime as _dt
                             from ait.config import get_log_path
                             log_path = get_log_path("approval.log")

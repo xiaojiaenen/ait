@@ -1,7 +1,6 @@
 """危险操作确认弹窗 — 支持"本次会话记住" """
 from __future__ import annotations
 
-import asyncio
 import datetime
 
 from textual.app import ComposeResult
@@ -90,5 +89,5 @@ async def show_confirm_dialog(
     _dlog(f"push_screen_wait returned: {result!r}")
     if isinstance(result, tuple) and len(result) == 2:
         return result
-    _dlog(f"unexpected result type, fallback to (False, False)")
+    _dlog("unexpected result type, fallback to (False, False)")
     return (False, False)

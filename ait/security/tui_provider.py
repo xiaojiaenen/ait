@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import sys
 
 from wuwei.runtime.hitl import ApprovalDecision, ApprovalProvider, ApprovalRequest
 
@@ -78,7 +77,7 @@ class TuiApprovalProvider(ApprovalProvider):
                 )
 
             if level == "auto":
-                _log(f"auto-approved (safe command) → approved")
+                _log("auto-approved (safe command) → approved")
                 return ApprovalDecision(status="approved")
 
             cache_key = f"{reason}:{command[:50]}"

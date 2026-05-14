@@ -178,7 +178,7 @@ class MetricsCollector:
     def _parse_macos_mem(self, raw: str, metrics: NodeMetrics) -> NodeMetrics:
         """解析 vm_stat + hw.memsize 输出"""
         page_size = 16384  # macOS 默认页大小 16KB (arm64) / 4KB (x86)
-        pages_free = pages_active = pages_inactive = pages_wired = 0
+        pages_free = pages_inactive = 0
         hw_memsize = 0
 
         for line in raw.split("\n"):
@@ -199,12 +199,8 @@ class MetricsCollector:
                     v = 0
                 if "free" in key.lower() and "page" in key.lower():
                     pages_free = v
-                elif "active" in key.lower():
-                    pages_active = v
                 elif "inactive" in key.lower():
                     pages_inactive = v
-                elif "wired" in key.lower():
-                    pages_wired = v
             else:
                 try:
                     hw_memsize = int(line.strip())
@@ -213,9 +209,7 @@ class MetricsCollector:
 
         if hw_memsize > 0:
             total_bytes = hw_memsize
-            used_pages = pages_active + pages_wired  # 粗略估算
-            used_bytes = used_pages * page_size
-            # 更准确: free + inactive 是可回收的
+            # free + inactive 是可回收的
             free_bytes = (pages_free + pages_inactive) * page_size
             metrics.mem_percent = round((1 - free_bytes / total_bytes) * 100, 1)
             metrics.mem_total_gb = round(total_bytes / 1024 / 1024 / 1024, 1)

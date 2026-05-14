@@ -6,7 +6,6 @@ from pathlib import Path
 
 from textual.widgets import Static, Label
 from textual.containers import Vertical
-from textual.reactive import reactive
 
 
 class NodePanel(Vertical):

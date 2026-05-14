@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import datetime
-import os
 from pathlib import Path
 
 from wuwei import (
     Agent,
-    AgentSession,
     ConsoleHook,
     ContextCompressionHook,
     FileStorage,
