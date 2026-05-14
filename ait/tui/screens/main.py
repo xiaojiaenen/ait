@@ -12,10 +12,11 @@ from textual.widgets import (
     Header,
     Footer,
     Static,
-    Button,
 )
+from textual.widget import Widget
 from textual.binding import Binding
 from textual.screen import Screen
+from rich.text import Text
 
 from ait.tui.panels.chat_panel import ChatPanel
 from ait.tui.panels.tool_panel import ToolPanel
@@ -25,12 +26,26 @@ from ait.tui.panels.skills_panel import SkillsPanel
 from ait.tui.panels.audit_panel import AuditPanel
 
 
+class GitHubLink(Widget):
+    """Footer 右侧的 GitHub 跳转链接，仿 FooterKey 的 click 处理方式"""
+
+    ALLOW_SELECT = False
+
+    def render(self) -> Text:
+        style = "bold #58a6ff" if self.mouse_over else "dim #484f58"
+        return Text("ait", style=style)
+
+    def on_click(self) -> None:
+        import webbrowser
+        webbrowser.open("https://github.com/xiaojiaenen/ait")
+
+
 class AitFooter(Footer):
     """自定义 Footer，右侧包含 GitHub 跳转按钮"""
 
     def compose(self) -> ComposeResult:
         yield from super().compose()
-        yield Button("ait", id="github-link")
+        yield GitHubLink(id="github-link")
 
 
 class MainScreen(Screen):
@@ -83,13 +98,6 @@ class MainScreen(Screen):
         self.query_one("#node-suggest", Static).display = False
         self.run_worker(self._init_agent())
         self.set_interval(10, self._refresh_metrics)
-
-    def on_button_pressed(self, event) -> None:
-        """处理按钮点击"""
-        if event.button.id == "github-link":
-            import webbrowser
-            webbrowser.open("https://github.com/xiaojiaenen/ait")
-            event.stop()
 
     def _write_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
