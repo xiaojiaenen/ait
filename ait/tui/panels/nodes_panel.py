@@ -80,6 +80,8 @@ class NodesPanel(Vertical):
         if self._selected_idx < 0 or self._selected_idx >= len(self._node_items):
             return
         node = self._node_items[self._selected_idx]
+        if node.name == "localhost":
+            return  # 不允许删除内置 localhost 节点
         try:
             from ait.nodes.manager import NodeManager
             nm = NodeManager(db_path=self.config_dir / "nodes.db")

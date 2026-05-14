@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
+import time
 from pathlib import Path
 
-from ait.nodes.models import Node, NodeStatus
+from ait.nodes.models import Node, NodeStatus, CommandResult
 from ait.nodes.ssh import SSHConnectionPool
+
+LOCALHOST = "localhost"
 
 
 class NodeManager:
@@ -19,6 +23,17 @@ class NodeManager:
         self.pool = SSHConnectionPool(known_hosts_dir=config_dir)
         self._init_db()
         self._init_groups_db()
+
+    @staticmethod
+    def _localhost_node() -> Node:
+        import getpass
+        return Node(
+            name=LOCALHOST,
+            host="127.0.0.1",
+            port=22,
+            user=getpass.getuser(),
+            tags=["local", "builtin"],
+        )
 
     def set_host_key_callback(self, callback) -> None:
         """设置主机密钥确认回调"""
@@ -57,6 +72,8 @@ class NodeManager:
         db.close()
 
     def add_node(self, node: Node):
+        if node.name == LOCALHOST:
+            return node  # localhost 是内置节点，不允许覆盖
         db = sqlite3.connect(str(self.db_path))
         db.execute(
             "INSERT OR REPLACE INTO nodes "
@@ -72,6 +89,8 @@ class NodeManager:
         return node
 
     def remove_node(self, name: str) -> bool:
+        if name == LOCALHOST:
+            return False  # 不允许删除内置 localhost 节点
         db = sqlite3.connect(str(self.db_path))
         cursor = db.execute("DELETE FROM nodes WHERE name = ?", (name,))
         db.commit()
@@ -84,7 +103,7 @@ class NodeManager:
         db.row_factory = sqlite3.Row
         rows = db.execute("SELECT * FROM nodes").fetchall()
         db.close()
-        nodes = []
+        nodes = [self._localhost_node()]  # 本地节点始终排在第一位
         for row in rows:
             try:
                 node_tags = json.loads(row["tags"])
@@ -111,6 +130,8 @@ class NodeManager:
         return nodes
 
     def get_node(self, name: str):
+        if name == LOCALHOST:
+            return self._localhost_node()
         db = sqlite3.connect(str(self.db_path))
         db.row_factory = sqlite3.Row
         row = db.execute("SELECT * FROM nodes WHERE name = ?", (name,)).fetchone()
@@ -139,14 +160,54 @@ class NodeManager:
         )
 
     async def exec_command(self, node_name: str, command: str, timeout: int = 60):
-        from ait.nodes.models import CommandResult
+        if node_name == LOCALHOST:
+            return await self._exec_local(command, timeout)
         node = self.get_node(node_name)
         if node is None:
             return CommandResult(node=node_name, command=command,
                 stderr="节点不存在: " + node_name, exit_code=-1, ok=False)
         return await self.pool.execute(node, command, timeout)
 
+    async def _exec_local(self, command: str, timeout: int = 60) -> CommandResult:
+        """在本地机器上执行命令（subprocess，不走 SSH）"""
+        start = time.time()
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout
+            )
+            duration_ms = (time.time() - start) * 1000
+            return CommandResult(
+                node=LOCALHOST,
+                command=command,
+                stdout=stdout.decode("utf-8", errors="replace") if stdout else "",
+                stderr=stderr.decode("utf-8", errors="replace") if stderr else "",
+                exit_code=proc.returncode or 0,
+                ok=(proc.returncode or 0) == 0,
+                duration_ms=duration_ms,
+            )
+        except asyncio.TimeoutError:
+            duration_ms = (time.time() - start) * 1000
+            return CommandResult(
+                node=LOCALHOST, command=command,
+                stderr=f"命令执行超时 ({timeout}s)", exit_code=-1, ok=False,
+                duration_ms=duration_ms,
+            )
+        except Exception as e:
+            duration_ms = (time.time() - start) * 1000
+            return CommandResult(
+                node=LOCALHOST, command=command,
+                stderr=str(e), exit_code=-1, ok=False,
+                duration_ms=duration_ms,
+            )
+
     async def health_check(self, node_name: str):
+        if node_name == LOCALHOST:
+            return NodeStatus.ONLINE  # 本地机器始终在线
         node = self.get_node(node_name)
         if node is None:
             return NodeStatus.OFFLINE

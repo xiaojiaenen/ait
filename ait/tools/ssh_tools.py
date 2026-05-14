@@ -10,9 +10,9 @@ def register_ssh_tools(registry, node_manager: NodeManager):
 
     @registry.tool(
         name="exec_command",
-        description="在指定节点上执行 Shell 命令并返回结果。节点名必须是已配置的节点。",
+        description="在指定节点上执行 Shell 命令。不指定节点时默认在当前机器 (localhost) 执行。",
     )
-    async def exec_command(node: str, command: str, timeout: int = 60) -> dict:
+    async def exec_command(command: str, node: str = "localhost", timeout: int = 60) -> dict:
         """在远程节点上执行命令"""
         result = await node_manager.exec_command(node, command, timeout)
         return {
@@ -163,9 +163,9 @@ def register_ssh_tools(registry, node_manager: NodeManager):
 
     @registry.tool(
         name="get_metrics",
-        description="获取节点的实时系统指标 (CPU%/内存%/磁盘%/负载) 和健康状态。",
+        description="获取节点的实时系统指标 (CPU%/内存%/磁盘%/负载)。不指定节点时默认获取当前机器指标。",
     )
-    async def get_metrics(node: str) -> dict:
+    async def get_metrics(node: str = "localhost") -> dict:
         """获取节点实时指标"""
         from ait.health.metrics import MetricsCollector
         collector = MetricsCollector(node_manager)

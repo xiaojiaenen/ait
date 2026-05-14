@@ -513,6 +513,25 @@ class MainScreen(Screen):
         metrics_data = []
         health_map = {}
         for node, result in zip(nodes, results):
+            if node.name == "localhost":
+                health_map[node.name] = "online"
+                if not isinstance(result, Exception) and result is not None and result.cpu_percent >= 0:
+                    metrics_data.append({
+                        "node": node.name,
+                        "cpu": result.cpu_percent,
+                        "mem": result.mem_percent,
+                        "disk": result.disk_percent,
+                        "load1": result.load_1min,
+                        "load5": result.load_5min,
+                        "load15": result.load_15min,
+                        "net_rx_kbps": result.net_rx_kbps,
+                        "net_tx_kbps": result.net_tx_kbps,
+                        "uptime_hours": result.uptime_hours,
+                        "cpu_cores": result.cpu_cores,
+                        "mem_used_gb": result.mem_used_gb,
+                        "mem_total_gb": result.mem_total_gb,
+                    })
+                continue
             if isinstance(result, Exception):
                 health_map[node.name] = "offline"
                 continue
