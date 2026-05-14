@@ -12,6 +12,7 @@ from textual.widgets import (
     Header,
     Footer,
     Static,
+    Button,
 )
 from textual.binding import Binding
 from textual.screen import Screen
@@ -74,13 +75,21 @@ class MainScreen(Screen):
         self.query_one("#node-suggest", Static).display = False
         self.run_worker(self._init_agent())
         self.set_interval(10, self._refresh_metrics)
-        # 将 GitHub 链接挂载到 Footer 右侧，避免与 Footer 的 dock:bottom 冲突
+        # 将 GitHub 链接挂载到 Footer 右侧
         self.query_one(Footer).mount(
-            Static(
-                "[dim][link=https://github.com/xiaojiaenen/ait]github.com/xiaojiaenen/ait[/link][/]",
+            Button(
+                "github",
                 id="github-link",
+                classes="-github-btn",
             )
         )
+
+    def on_button_pressed(self, event) -> None:
+        """处理按钮点击"""
+        if event.button.id == "github-link":
+            import webbrowser
+            webbrowser.open("https://github.com/xiaojiaenen/ait")
+            event.stop()
 
     def _write_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
