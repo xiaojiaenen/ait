@@ -25,6 +25,14 @@ from ait.tui.panels.skills_panel import SkillsPanel
 from ait.tui.panels.audit_panel import AuditPanel
 
 
+class AitFooter(Footer):
+    """自定义 Footer，右侧包含 GitHub 跳转按钮"""
+
+    def compose(self) -> ComposeResult:
+        yield from super().compose()
+        yield Button("ait", id="github-link")
+
+
 class MainScreen(Screen):
     """运维主屏幕"""
 
@@ -67,7 +75,7 @@ class MainScreen(Screen):
                 yield AuditPanel()
         yield Input(id="input-bar", placeholder="输入运维操作... @节点名 /宏名")
         yield Static("", id="node-suggest")
-        yield Footer()
+        yield AitFooter()
 
     def on_mount(self) -> None:
         self._write_welcome()
@@ -75,14 +83,6 @@ class MainScreen(Screen):
         self.query_one("#node-suggest", Static).display = False
         self.run_worker(self._init_agent())
         self.set_interval(10, self._refresh_metrics)
-        # 将 GitHub 链接挂载到 Footer 右侧
-        self.query_one(Footer).mount(
-            Button(
-                "github",
-                id="github-link",
-                classes="-github-btn",
-            )
-        )
 
     def on_button_pressed(self, event) -> None:
         """处理按钮点击"""
