@@ -27,7 +27,7 @@ from ait.tui.panels.audit_panel import AuditPanel
 
 
 class GitHubLink(Widget):
-    """Footer 右侧的 GitHub 跳转链接，仿 FooterKey 的 click 处理方式"""
+    """Header 右侧的 GitHub 跳转链接"""
 
     ALLOW_SELECT = False
 
@@ -38,14 +38,6 @@ class GitHubLink(Widget):
     def on_click(self) -> None:
         import webbrowser
         webbrowser.open("https://github.com/xiaojiaenen/ait")
-
-
-class AitFooter(Footer):
-    """自定义 Footer，右侧包含 GitHub 跳转按钮"""
-
-    def compose(self) -> ComposeResult:
-        yield from super().compose()
-        yield GitHubLink(id="github-link")
 
 
 class MainScreen(Screen):
@@ -90,7 +82,7 @@ class MainScreen(Screen):
                 yield AuditPanel()
         yield Input(id="input-bar", placeholder="输入运维操作... @节点名 /宏名")
         yield Static("", id="node-suggest")
-        yield AitFooter()
+        yield Footer()
 
     def on_mount(self) -> None:
         self._write_welcome()
@@ -98,6 +90,7 @@ class MainScreen(Screen):
         self.query_one("#node-suggest", Static).display = False
         self.run_worker(self._init_agent())
         self.set_interval(10, self._refresh_metrics)
+        self.query_one(Header).mount(GitHubLink(id="github-link"))
 
     def _write_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
