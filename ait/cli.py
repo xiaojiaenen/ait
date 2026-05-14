@@ -44,9 +44,12 @@ def main(
 @app.command()
 def version() -> None:
     """显示版本信息"""
-    from importlib.metadata import version as get_version
-
-    typer.echo(f"ait {get_version('ait')}")
+    try:
+        from importlib.metadata import version as get_version
+        ver = get_version("ait")
+    except Exception:
+        ver = "dev"
+    typer.echo(f"ait {ver}")
 
 
 @app.command()
