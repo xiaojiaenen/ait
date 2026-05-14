@@ -177,7 +177,11 @@ class NodesPanel(Vertical):
         auth = node.auth_method.value if hasattr(node, 'auth_method') else "key"
         auth_icon = "[dim italic]key[/]" if auth == "key" else "[dim italic]pwd[/]"
 
-        line = f"{cursor} {icon} {node.name} {auth_icon} [dim]{node.host}[/]"
+        node_os = getattr(node, 'os', 'linux') or 'linux'
+        os_icons = {"linux": "[dim]🐧[/]", "macos": "[dim]🍎[/]", "windows": "[dim]🪟[/]"}
+        os_icon = os_icons.get(node_os, "")
+
+        line = f"{cursor} {icon} {node.name} {os_icon} {auth_icon} [dim]{node.host}[/]"
         if selected:
             line = "[bold]" + line + "[/]"
 
@@ -186,6 +190,7 @@ class NodesPanel(Vertical):
             detail_lines = [
                 f"    host: {node.host}:{node.port}",
                 f"    user: {node.user}",
+                f"    os: {node_os}",
                 f"    auth: {auth}",
             ]
             if node.tags:

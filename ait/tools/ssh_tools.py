@@ -27,7 +27,7 @@ def register_ssh_tools(registry, node_manager: NodeManager):
 
     @registry.tool(
         name="list_nodes",
-        description="列出已配置的节点。可选按标签筛选。",
+        description="列出已配置的节点。返回节点名、主机、OS 类型等。",
     )
     def list_nodes(tags: list[str] | None = None) -> list[dict]:
         """列出节点"""
@@ -38,6 +38,7 @@ def register_ssh_tools(registry, node_manager: NodeManager):
                 "host": n.host,
                 "port": n.port,
                 "user": n.user,
+                "os": n.os,
                 "tags": n.tags,
                 "groups": n.groups,
             }
@@ -46,13 +47,14 @@ def register_ssh_tools(registry, node_manager: NodeManager):
 
     @registry.tool(
         name="add_node",
-        description="添加新的运维节点。支持 key 和 password 两种认证方式。password 认证时需提供 password 参数。",
+        description="添加运维节点。os 参数指定操作系统: linux/macos/windows，默认 linux。Windows 节点建议设置 login_shell=false。",
     )
     def add_node(
         name: str, host: str, port: int = 22, user: str = "root",
         auth_method: str = "key", key_path: str | None = None,
         password: str | None = None,
         login_shell: bool = True,
+        os: str = "linux",
         tags: list[str] | None = None, groups: list[str] | None = None,
     ) -> dict:
         """添加节点"""
@@ -61,7 +63,7 @@ def register_ssh_tools(registry, node_manager: NodeManager):
         node = Node(
             name=name, host=host, port=port, user=user,
             auth_method=method, key_path=key_path, password=password,
-            login_shell=login_shell,
+            login_shell=login_shell, os=os,
             tags=tags or [], groups=groups or [],
         )
         node_manager.add_node(node)

@@ -27,11 +27,19 @@ class NodeManager:
     @staticmethod
     def _localhost_node() -> Node:
         import getpass
+        import sys
+        if sys.platform == "darwin":
+            node_os = "macos"
+        elif sys.platform in ("win32", "cygwin"):
+            node_os = "windows"
+        else:
+            node_os = "linux"
         return Node(
             name=LOCALHOST,
             host="127.0.0.1",
             port=22,
             user=getpass.getuser(),
+            os=node_os,
             tags=["local", "builtin"],
         )
 
@@ -55,6 +63,7 @@ class NodeManager:
             "key_path TEXT, "
             "password TEXT, "
             "login_shell INTEGER DEFAULT 1, "
+            "os TEXT DEFAULT 'linux', "
             "tags TEXT DEFAULT '[]', "
             "groups TEXT DEFAULT '[]', "
             "created_at TEXT DEFAULT (datetime('now'))"
@@ -63,7 +72,7 @@ class NodeManager:
         db.execute(sql)
         db.commit()
         # 兼容旧表
-        for col in ["password TEXT", "login_shell INTEGER DEFAULT 1"]:
+        for col in ["password TEXT", "login_shell INTEGER DEFAULT 1", "os TEXT DEFAULT 'linux'"]:
             try:
                 db.execute("ALTER TABLE nodes ADD COLUMN " + col)
                 db.commit()
@@ -77,11 +86,12 @@ class NodeManager:
         db = sqlite3.connect(str(self.db_path))
         db.execute(
             "INSERT OR REPLACE INTO nodes "
-            "(name, host, port, username, auth_method, key_path, password, login_shell, tags, groups, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))",
+            "(name, host, port, username, auth_method, key_path, password, login_shell, os, tags, groups, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))",
             (node.name, node.host, node.port, node.user,
              node.auth_method.value, node.key_path, node.password,
              1 if node.login_shell else 0,
+             node.os,
              json.dumps(node.tags), json.dumps(node.groups)),
         )
         db.commit()
@@ -125,6 +135,7 @@ class NodeManager:
                 auth_method=row["auth_method"], key_path=row["key_path"],
                 password=row["password"],
                 login_shell=bool(row["login_shell"]) if "login_shell" in row.keys() else True,
+                os=row["os"] if "os" in row.keys() else "linux",
                 tags=node_tags, groups=groups,
             ))
         return nodes
@@ -156,6 +167,7 @@ class NodeManager:
             auth_method=row["auth_method"], key_path=row["key_path"],
             password=row["password"],
             login_shell=bool(row["login_shell"]) if "login_shell" in row.keys() else True,
+            os=row["os"] if "os" in row.keys() else "linux",
             tags=node_tags, groups=groups,
         )
 

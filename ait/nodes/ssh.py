@@ -101,15 +101,31 @@ class SSHConnectionPool:
         with open(self._known_hosts_path, "a") as f:
             f.write(line)
 
+    def _wrap_command(self, node: Node, command: str) -> str:
+        """根据目标 OS 选择合适的 shell 包装命令"""
+        import shlex
+        node_os = getattr(node, "os", "linux") or "linux"
+        use_login = getattr(node, "login_shell", True)
+
+        if node_os == "windows":
+            # Windows: 不包装，直接执行（默认 shell 是 cmd）
+            # 如果 AI 需要 PowerShell，它会在命令中使用 powershell -Command "..."
+            return command
+
+        # Linux / macOS
+        if use_login and not command.startswith("bash "):
+            return "bash -l -c " + shlex.quote(command)
+
+        return command
+
     async def execute(
         self, node: Node, command: str, timeout: int = 60
     ) -> CommandResult:
         start = time.time()
         try:
             conn = await self.get_connection(node)
-            # 登录 Shell：通过 bash -l -c 加载完整环境（PATH、别名等）
-            if getattr(node, "login_shell", True) and not command.startswith("bash "):
-                command = "bash -l -c " + __import__("shlex").quote(command)
+            # 根据目标 OS 选择 shell 包装
+            command = self._wrap_command(node, command)
             result = await asyncio.wait_for(
                 conn.run(command),
                 timeout=timeout,
