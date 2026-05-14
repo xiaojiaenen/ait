@@ -387,3 +387,13 @@ Scrollbar {
     scrollbar-color-hover: #484f58;
     scrollbar-color-active: #58a6ff;
 }
+
+/* -- GitHub 链接 -- */
+#github-link {
+    dock: bottom;
+    height: 1;
+    text-align: center;
+    text-style: dim;
+    color: #484f58;
+    background: #0d1117;
+}

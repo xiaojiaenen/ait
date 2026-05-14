@@ -67,6 +67,10 @@ class MainScreen(Screen):
         yield Input(id="input-bar", placeholder="输入运维操作... @节点名 /宏名")
         yield Static("", id="node-suggest")
         yield Footer()
+        yield Static(
+            "[dim][link=https://github.com/xiaojiaenen/ait]github.com/xiaojiaenen/ait[/link][/]",
+            id="github-link",
+        )
 
     def on_mount(self) -> None:
         self._write_welcome()
