@@ -67,10 +67,6 @@ class MainScreen(Screen):
         yield Input(id="input-bar", placeholder="输入运维操作... @节点名 /宏名")
         yield Static("", id="node-suggest")
         yield Footer()
-        yield Static(
-            "[dim][link=https://github.com/xiaojiaenen/ait]github.com/xiaojiaenen/ait[/link][/]",
-            id="github-link",
-        )
 
     def on_mount(self) -> None:
         self._write_welcome()
@@ -78,6 +74,13 @@ class MainScreen(Screen):
         self.query_one("#node-suggest", Static).display = False
         self.run_worker(self._init_agent())
         self.set_interval(10, self._refresh_metrics)
+        # 将 GitHub 链接挂载到 Footer 右侧，避免与 Footer 的 dock:bottom 冲突
+        self.query_one(Footer).mount(
+            Static(
+                "[dim][link=https://github.com/xiaojiaenen/ait]github.com/xiaojiaenen/ait[/link][/]",
+                id="github-link",
+            )
+        )
 
     def _write_welcome(self) -> None:
         chat = self.query_one(ChatPanel)

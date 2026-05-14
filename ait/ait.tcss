@@ -388,12 +388,11 @@ Scrollbar {
     scrollbar-color-active: #58a6ff;
 }
 
-/* -- GitHub 链接 -- */
+/* -- GitHub 链接（挂在 Footer 右侧） -- */
 #github-link {
-    dock: bottom;
+    dock: right;
     height: 1;
-    text-align: center;
     text-style: dim;
     color: #484f58;
-    background: #0d1117;
+    padding: 0 1;
 }
