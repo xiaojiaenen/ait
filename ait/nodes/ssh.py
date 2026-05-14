@@ -18,7 +18,8 @@ class SSHConnectionPool:
         self._connections: dict[str, asyncssh.SSHClientConnection] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._max_connections = max_connections
-        self._known_hosts_dir = known_hosts_dir or Path.home() / ".ait"
+        from ait.config import get_config_dir
+        self._known_hosts_dir = known_hosts_dir or get_config_dir()
         self._known_hosts_dir.mkdir(parents=True, exist_ok=True)
         self._known_hosts_path = self._known_hosts_dir / "known_hosts"
         self._host_key_callback: Callable | None = None

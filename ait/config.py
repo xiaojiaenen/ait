@@ -1,11 +1,40 @@
-"""配置管理 — Pydantic 模型 + TOML 加载"""
+"""配置管理 — Pydantic 模型 + TOML 加载 + 平台感知路径"""
 
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+
+def get_config_dir() -> Path:
+    """返回平台感知的默认配置目录。
+
+    Linux:   $XDG_CONFIG_HOME/ait 或 ~/.config/ait
+    macOS:   ~/.ait
+    Windows: %APPDATA%\\ait
+    """
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+        return Path(appdata) / "ait"
+
+    if sys.platform == "darwin":
+        return Path.home() / ".ait"
+
+    # Linux: 遵循 XDG 规范
+    xdg = os.environ.get("XDG_CONFIG_HOME", "")
+    if xdg:
+        return Path(xdg) / "ait"
+    return Path.home() / ".ait"
+
+
+def get_log_path(filename: str = "approval.log") -> Path:
+    """返回日志文件路径"""
+    d = get_config_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    return d / filename
 
 
 class LLMConfig(BaseModel):
@@ -45,7 +74,7 @@ class SkillsConfig(BaseModel):
     """Skills 配置"""
     auto_generate: bool = Field(default=True)
     min_steps: int = Field(default=3)
-    path: str = Field(default="~/.ait/skills")
+    path: str = Field(default="")  # 空字符串表示使用 get_config_dir()/skills
 
 
 class AitConfig(BaseModel):

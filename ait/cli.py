@@ -7,6 +7,8 @@ from typing import Annotated
 
 import typer
 
+from ait.config import get_config_dir
+
 app = typer.Typer(
     name="ait",
     help="AI 智能运维终端 - 用自然语言管理服务器",
@@ -17,7 +19,7 @@ app = typer.Typer(
 def _config_dir_callback(value: str | None) -> Path:
     """解析配置目录路径"""
     if value is None:
-        return Path.home() / ".ait"
+        return get_config_dir()
     return Path(value).expanduser()
 
 

@@ -4,13 +4,14 @@ from __future__ import annotations
 import asyncio
 import datetime
 import sys
-from pathlib import Path
 
 from wuwei.runtime.hitl import ApprovalDecision, ApprovalProvider, ApprovalRequest
 
 from ait.security.policy import DangerousCommandPolicy
 
-LOG_PATH = Path.home() / ".ait" / "approval.log"
+from ait.config import get_log_path
+
+LOG_PATH = get_log_path("approval.log")
 
 
 def _log(msg: str) -> None:

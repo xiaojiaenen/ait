@@ -103,7 +103,8 @@ class DangerousCommandPolicy(ApprovalPolicy):
         from pathlib import Path
         tool_name = tool_call.function.name
 
-        log_path = Path.home() / ".ait" / "approval.log"
+        from ait.config import get_log_path
+        log_path = get_log_path("approval.log")
         def _plog(msg):
             try:
                 ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]

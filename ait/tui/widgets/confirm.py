@@ -3,14 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Center, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static, Checkbox
 
-LOG_PATH = Path.home() / ".ait" / "approval.log"
+from ait.config import get_log_path
+
+LOG_PATH = get_log_path("approval.log")
 
 
 def _dlog(msg: str) -> None:

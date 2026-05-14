@@ -405,7 +405,8 @@ class MainScreen(Screen):
                         try:
                             from pathlib import Path as _Path
                             import datetime as _dt
-                            log_path = _Path.home() / ".ait" / "approval.log"
+                            from ait.config import get_log_path
+                            log_path = get_log_path("approval.log")
                             ts = _dt.datetime.now().strftime("%H:%M:%S.%f")[:-3]
                             with open(log_path, "a") as f:
                                 f.write(f"[{ts}] [MAIN] tool rejected: {name}, reason={reason}\n")
