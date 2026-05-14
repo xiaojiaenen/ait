@@ -44,23 +44,15 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller ait.spec --clean --noconfirm
 
-      - name: Package (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          cd dist
-          zip -r ../${{ matrix.artifact }}.zip ait/
-
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          cd dist
-          7z a -tzip ../${{ matrix.artifact }}.zip ait/
+      - name: Rename binary
+        shell: bash
+        run: mv dist/ait${{ matrix.ext }} ${{ matrix.artifact }}${{ matrix.ext }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.zip
+          path: ${{ matrix.artifact }}${{ matrix.ext }}
 
   release:
     name: Create Release
@@ -78,6 +70,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*/*.zip
+          files: artifacts/*/*
           draft: false
           generate_release_notes: true
