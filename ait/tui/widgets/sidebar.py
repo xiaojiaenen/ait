@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from textual.containers import Vertical
-from textual.widgets import Static
+from textual.widgets import Static, RichLog
 
 
 TOOL_CN_NAMES = {
@@ -36,7 +36,7 @@ class Sidebar(Vertical):
 
     def compose(self):
         yield Static("[bold]会话[/]", id="sidebar-session-title")
-        yield Static("[dim]工具执行结果将显示在此[/]", id="sidebar-session")
+        yield RichLog(id="sidebar-log", highlight=True, markup=True, wrap=True)
 
     # -- 工具结果 --
 
@@ -65,7 +65,7 @@ class Sidebar(Vertical):
     def add_skill_call(self, skill_name: str) -> None:
         import datetime
         ts = datetime.datetime.now().strftime("%H:%M:%S")
-        self._skill_calls.append(f"[dim]{ts}[/]  [bold magenta]⚙[/] {skill_name}")
+        self._skill_calls.append(f"[dim]{ts}[/]  [bold magenta]⚙[/] [cyan]{skill_name}[/]")
         if len(self._skill_calls) > 20:
             self._skill_calls = self._skill_calls[-20:]
         self._refresh()
@@ -81,28 +81,35 @@ class Sidebar(Vertical):
     # -- 渲染 --
 
     def _refresh(self) -> None:
-        parts = []
+        try:
+            log = self.query_one("#sidebar-log", RichLog)
+            log.clear()
+        except Exception:
+            return
 
         # === 会话活动（工具结果） ===
+        log.write("[bold #58a6ff]▸ 会话活动[/]")
+        has_activity = False
         for entry in self._tp_entries:
-            parts.append(entry["card"])
+            log.write(entry["card"])
+            has_activity = True
         for label in self._tp_pending.values():
-            if parts:
-                parts.append("")
-            parts.append("[dim yellow]⏳ {} ...[/]".format(label))
-        if not parts:
-            parts.append("[dim]暂无活动[/]")
+            log.write("[dim yellow]⏳ {} ...[/]".format(label))
+            has_activity = True
+        if not has_activity:
+            log.write("[dim]  暂无活动[/]")
 
         # === 技能调用 ===
         if self._skill_calls:
-            parts.append("")
-            parts.append("[bold]技能调用[/]")
-            parts.extend(self._skill_calls)
+            log.write("")
+            log.write("[bold #3fb950]▸ 技能调用[/]")
+            for call in self._skill_calls:
+                log.write("  " + call)
 
         # === 审计记录 ===
         if self._audit_entries:
-            parts.append("")
-            parts.append("[bold]审计记录[/]")
+            log.write("")
+            log.write("[bold #d29922]▸ 审计记录[/]")
             for entry in self._audit_entries[-15:]:
                 result = entry.get("result", "")
                 if result == "ok":
@@ -113,8 +120,8 @@ class Sidebar(Vertical):
                     status = "[yellow]⊘[/]"
                 else:
                     status = result
-                parts.append(
-                    "{} [dim]{}[/] {} {} [dim]{}[/]".format(
+                log.write(
+                    "  {} [dim]{}[/] {} {} [dim]{}[/]".format(
                         status,
                         entry.get("time", ""),
                         entry.get("node", "-"),
@@ -122,13 +129,6 @@ class Sidebar(Vertical):
                         entry.get("approved", ""),
                     )
                 )
-
-        text = "\n".join(parts)
-        try:
-            w = self.query_one("#sidebar-session", Static)
-            w.update(text)
-        except Exception:
-            pass
 
     def clear_results(self) -> None:
         self._tp_entries.clear()
@@ -195,7 +195,7 @@ class Sidebar(Vertical):
         elif isinstance(output, list):
             if len(output) <= 8:
                 names = [n.get("name", str(n)) if isinstance(n, dict) else str(n) for n in output]
-                stdout = "{} 项:\n{}".format(len(output), "\n".join("- " + n for n in names))
+                stdout = "{} 项:\n".format(len(output)) + "\n".join("- " + n for n in names)
             else:
                 names = [n.get("name", str(n)) if isinstance(n, dict) else str(n) for n in output[:6]]
                 stdout = "{} 项:\n{}\n  ...(+{} 项)".format(
