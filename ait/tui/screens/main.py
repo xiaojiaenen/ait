@@ -17,11 +17,11 @@ from textual.binding import Binding
 from textual.screen import Screen
 
 from ait.tui.panels.chat_panel import ChatPanel
-from ait.tui.panels.tool_panel import ToolPanel
 from ait.tui.panels.nodes_panel import NodesPanel
 from ait.tui.panels.metrics_panel import MetricsPanel
 from ait.tui.panels.skills_panel import SkillsPanel
 from ait.tui.panels.audit_panel import AuditPanel
+from ait.tui.widgets.sidebar import Sidebar
 
 
 class MainScreen(Screen):
@@ -51,19 +51,19 @@ class MainScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        with TabbedContent(id="main-tabs"):
-            with TabPane("对话", id="tab-chat"):
-                with Horizontal(id="chat-split"):
+        with Horizontal(id="main-split"):
+            with TabbedContent(id="main-tabs"):
+                with TabPane("对话", id="tab-chat"):
                     yield ChatPanel()
-                    yield ToolPanel()
-            with TabPane("节点", id="tab-nodes"):
-                yield NodesPanel(config_dir=self.config_dir)
-            with TabPane("指标", id="tab-metrics"):
-                yield MetricsPanel()
-            with TabPane("技能", id="tab-skills"):
-                yield SkillsPanel()
-            with TabPane("审计", id="tab-audit"):
-                yield AuditPanel()
+                with TabPane("节点", id="tab-nodes"):
+                    yield NodesPanel(config_dir=self.config_dir)
+                with TabPane("指标", id="tab-metrics"):
+                    yield MetricsPanel()
+                with TabPane("技能", id="tab-skills"):
+                    yield SkillsPanel()
+                with TabPane("审计", id="tab-audit"):
+                    yield AuditPanel()
+            yield Sidebar()
         yield Input(id="input-bar", placeholder="输入运维操作... @节点名 /宏名")
         yield Static("", id="node-suggest")
         yield Footer()
@@ -116,7 +116,7 @@ class MainScreen(Screen):
 
     def action_clear(self) -> None:
         self.query_one(ChatPanel).clear()
-        self.query_one(ToolPanel).clear_results()
+        self.query_one(Sidebar).clear_results()
 
     # -- Agent lifecycle --
 
@@ -288,7 +288,7 @@ class MainScreen(Screen):
         chat.write_line("")
         chat.write_line("> **You** " + text)
         chat.write_line("")
-        self.query_one(ToolPanel).clear_results()
+        self.query_one(Sidebar).clear_results()
 
         self.query_one("#main-tabs", TabbedContent).active = "tab-chat"
 
@@ -331,8 +331,8 @@ class MainScreen(Screen):
 
     async def _run_agent(self, text: str) -> None:
         chat = self.query_one(ChatPanel)
-        tools = self.query_one(ToolPanel)
-        audit = self.query_one(AuditPanel)
+        sidebar = self.query_one(Sidebar)
+        audit_panel = self.query_one(AuditPanel)
         import datetime
         try:
             first_text = True
@@ -355,15 +355,24 @@ class MainScreen(Screen):
                     chat.flush()
                     first_text = True
                     args = event.data.get("args", {})
-                    self._tool_name = event.data.get("tool_name", "")
+                    tool_name = event.data.get("tool_name", "")
+                    self._tool_name = tool_name
                     self._tool_node = args.get("node", "-")
                     self._tool_cmd = str(args.get("command", ""))[:80]
                     self._tool_time = datetime.datetime.now().strftime("%H:%M:%S")
+                    # 技能调用追踪
+                    if tool_name in ("load_skill", "list_skills", "run_skill"):
+                        skill_name = args.get("skill_name", args.get("name", ""))
+                        if skill_name:
+                            try:
+                                sidebar.add_skill_call(skill_name)
+                            except Exception:
+                                pass
                     try:
-                        tools.start_tool(self._tool_name,
-                                         self._tool_node,
-                                         self._tool_cmd,
-                                         call_id)
+                        sidebar.start_tool(tool_name,
+                                          self._tool_node,
+                                          self._tool_cmd,
+                                          call_id)
                     except Exception:
                         pass
                 elif event.type == "tool_end":
@@ -388,7 +397,7 @@ class MainScreen(Screen):
                         except (_json.JSONDecodeError, TypeError):
                             output_dict = {}
                     try:
-                        tools.add_result(name, node, cmd, output, call_id)
+                        sidebar.add_result(name, node, cmd, output, call_id)
                     except Exception:
                         pass
                     # 根据解析结果确定状态
@@ -417,14 +426,19 @@ class MainScreen(Screen):
                     else:
                         result = "ok"
                         approved = "auto"
+                    audit_entry = {
+                        "time": getattr(self, "_tool_time", ""),
+                        "node": node,
+                        "command": cmd or name,
+                        "result": result,
+                        "approved": approved,
+                    }
                     try:
-                        audit.add_entry({
-                            "time": getattr(self, "_tool_time", ""),
-                            "node": node,
-                            "command": cmd or name,
-                            "result": result,
-                            "approved": approved,
-                        })
+                        audit_panel.add_entry(audit_entry)
+                    except Exception:
+                        pass
+                    try:
+                        sidebar.add_audit(audit_entry)
                     except Exception:
                         pass
                 elif event.type in ("error", "tool_error"):
@@ -435,14 +449,19 @@ class MainScreen(Screen):
                         chat.write_line("*操作未能完成: {}*".format(msg))
                     else:
                         chat.write_line("*操作未能完成*")
+                    audit_error = {
+                        "time": getattr(self, "_tool_time", ""),
+                        "node": getattr(self, "_tool_node", "-"),
+                        "command": getattr(self, "_tool_cmd", "")[:60],
+                        "result": "error",
+                        "approved": "blocked",
+                    }
                     try:
-                        audit.add_entry({
-                            "time": getattr(self, "_tool_time", ""),
-                            "node": getattr(self, "_tool_node", "-"),
-                            "command": getattr(self, "_tool_cmd", "")[:60],
-                            "result": "error",
-                            "approved": "blocked",
-                        })
+                        audit_panel.add_entry(audit_error)
+                    except Exception:
+                        pass
+                    try:
+                        sidebar.add_audit(audit_error)
                     except Exception:
                         pass
                 elif event.type == "done":

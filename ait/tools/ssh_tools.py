@@ -10,7 +10,8 @@ def register_ssh_tools(registry, node_manager: NodeManager):
 
     @registry.tool(
         name="exec_command",
-        description="在指定节点上执行 Shell 命令。不指定节点时默认在当前机器 (localhost) 执行。",
+        description="在指定节点上执行 Shell 命令。不指定节点时默认在当前机器 (localhost) 执行。timeout 参数设置命令超时秒数（默认 60）。",
+        timeout_seconds=300,
     )
     async def exec_command(command: str, node: str = "localhost", timeout: int = 60) -> dict:
         """在远程节点上执行命令"""
@@ -103,7 +104,8 @@ def register_ssh_tools(registry, node_manager: NodeManager):
 
     @registry.tool(
         name="batch_exec",
-        description="在多个节点上并发执行相同的命令。node_names 是节点名称列表。",
+        description="在多个节点上并发执行相同的命令。node_names 是节点名称列表。timeout 参数设置每个节点命令超时秒数（默认 60）。",
+        timeout_seconds=600,
     )
     async def batch_exec(node_names: list[str], command: str, timeout: int = 60) -> dict:
         """多节点并发执行命令"""
