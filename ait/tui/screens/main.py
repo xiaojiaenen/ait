@@ -8,13 +8,15 @@ from textual.containers import Horizontal
 from textual.widgets import (
     TabbedContent,
     TabPane,
-    Input,
+    TextArea,
     Header,
     Footer,
     Static,
 )
 from textual.binding import Binding
+from textual.events import Key
 from textual.screen import Screen
+from textual.message import Message
 
 from ait.tui.panels.chat_panel import ChatPanel
 from ait.tui.panels.nodes_panel import NodesPanel
@@ -22,6 +24,24 @@ from ait.tui.panels.metrics_panel import MetricsPanel
 from ait.tui.panels.skills_panel import SkillsPanel
 from ait.tui.panels.audit_panel import AuditPanel
 from ait.tui.widgets.sidebar import Sidebar
+
+
+class ChatInput(TextArea):
+    """多行输入框 — Enter 提交, Shift+Enter 换行"""
+
+    BINDINGS = [
+        Binding("enter", "submit", "提交", priority=True, show=False),
+    ]
+
+    class Submitted(Message):
+        def __init__(self, text: str) -> None:
+            super().__init__()
+            self.text = text
+
+    def action_submit(self) -> None:
+        text = self.text
+        if text.strip():
+            self.post_message(self.Submitted(text))
 
 
 class MainScreen(Screen):
@@ -38,6 +58,7 @@ class MainScreen(Screen):
         Binding("5", "switch_tab('audit')", "审计", show=False),
         Binding("up", "history_up", "", show=False),
         Binding("down", "history_down", "", show=False),
+        Binding("escape", "escape_input", "", show=False),
     ]
 
     def __init__(self, config_dir: Path):
@@ -65,13 +86,13 @@ class MainScreen(Screen):
                 with TabPane("审计", id="tab-audit"):
                     yield AuditPanel()
             yield Sidebar()
-        yield Input(id="input-bar", placeholder="输入运维操作... @节点名 /宏名")
+        yield ChatInput(id="input-bar")
         yield Static("", id="node-suggest")
         yield Footer()
 
     def on_mount(self) -> None:
         self._write_welcome()
-        self.query_one("#input-bar", Input).focus()
+        self.query_one("#input-bar", ChatInput).focus()
         self.query_one("#node-suggest", Static).display = False
         self.run_worker(self._init_agent())
         self.set_interval(10, self._refresh_metrics)
@@ -94,26 +115,36 @@ class MainScreen(Screen):
         if not self._command_history:
             return
         focused = self.focused
-        if focused and isinstance(focused, Input):
+        if focused and isinstance(focused, ChatInput):
             if self._history_index == -1:
-                self._saved_input = focused.value
+                self._saved_input = focused.text
             if self._history_index < len(self._command_history) - 1:
                 self._history_index += 1
             idx = len(self._command_history) - 1 - self._history_index
-            focused.value = self._command_history[idx]
-            focused.action_end()
+            focused.text = self._command_history[idx]
+            focused.move_cursor(row=0, column=len(focused.text))
 
     def action_history_down(self) -> None:
         focused = self.focused
-        if focused and isinstance(focused, Input):
+        if focused and isinstance(focused, ChatInput):
             if self._history_index > 0:
                 self._history_index -= 1
                 idx = len(self._command_history) - 1 - self._history_index
-                focused.value = self._command_history[idx]
+                focused.text = self._command_history[idx]
             elif self._history_index == 0:
                 self._history_index = -1
-                focused.value = self._saved_input
-            focused.action_end()
+                focused.text = self._saved_input
+            focused.move_cursor(row=0, column=len(focused.text))
+
+    def action_escape_input(self) -> None:
+        """Esc 键：取消 @ 建议或清空输入框"""
+        suggest = self.query_one("#node-suggest", Static)
+        if suggest.display:
+            suggest.display = False
+            self._suggest_matches = []
+            self._suggest_index = 0
+        else:
+            self.query_one("#input-bar", ChatInput).clear()
 
     def action_clear(self) -> None:
         self.query_one(ChatPanel).clear()
@@ -178,11 +209,11 @@ class MainScreen(Screen):
         except Exception:
             return []
 
-    def on_input_changed(self, event: Input.Changed) -> None:
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """检测 @ 输入，显示节点建议列表"""
-        if event.input.id != "input-bar":
+        if event.text_area.id != "input-bar":
             return
-        value = event.value or ""
+        value = event.text_area.text or ""
         suggest = self.query_one("#node-suggest", Static)
 
         # 查找最后一个 @ 位置
@@ -193,8 +224,8 @@ class MainScreen(Screen):
 
         # 提取 @ 后面的部分
         after_at = value[at_idx + 1:]
-        # 如果 @ 后面有空格，不显示建议
-        if " " in after_at:
+        # 如果 @ 后面有空格或换行，不显示建议
+        if " " in after_at or "\n" in after_at:
             suggest.display = False
             return
 
@@ -240,13 +271,13 @@ class MainScreen(Screen):
         elif event.key == "tab":
             if matches and self._suggest_index < len(matches):
                 name = matches[self._suggest_index]
-                input_bar = self.query_one("#input-bar", Input)
-                value = input_bar.value
+                input_bar = self.query_one("#input-bar", ChatInput)
+                value = input_bar.text
                 at_idx = value.rfind("@")
                 # 替换 @partial 为 @name
                 new_value = value[:at_idx + 1] + name + " "
-                input_bar.value = new_value
-                input_bar.action_end()
+                input_bar.text = new_value
+                input_bar.move_cursor(row=0, column=len(new_value))
                 suggest.display = False
                 self._suggest_matches = []
                 self._suggest_index = 0
@@ -285,21 +316,22 @@ class MainScreen(Screen):
         except Exception:
             return []
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        text = event.value.strip()
+    def on_chat_input_submitted(self, event: ChatInput.Submitted) -> None:
+        text = event.text.strip()
         if not text:
             return
         # 隐藏建议
         self.query_one("#node-suggest", Static).display = False
 
-        input_bar = self.query_one("#input-bar", Input)
+        input_bar = self.query_one("#input-bar", ChatInput)
         self._command_history.append(text)
         self._history_index = -1
         self._saved_input = ""
 
         chat = self.query_one(ChatPanel)
-        chat.write_line("")
-        chat.write_line("> **You** " + text)
+        # 多行文本每行一个引用
+        for line in text.split("\n"):
+            chat.write_line("> **You** " + line)
         chat.write_line("")
         self.query_one(Sidebar).clear_results()
 
