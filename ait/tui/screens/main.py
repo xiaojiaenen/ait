@@ -389,6 +389,8 @@ class MainScreen(Screen):
         import datetime
         try:
             first_text = True
+            completed = False
+            chat.write_line("⏳ AI 处理中...")
             self._seen_tool_starts: set[str] = set()
             self._seen_tool_ends: set[str] = set()
             async for event in self.agent.stream(text):
@@ -519,7 +521,8 @@ class MainScreen(Screen):
                         pass
                 elif event.type == "done":
                     chat.flush()
-                    chat.write_line("")
+                    chat.write_line("✓ 完成")
+                    completed = True
         except Exception as e:
             chat.flush()
             chat.write_line("")
@@ -535,8 +538,10 @@ class MainScreen(Screen):
                     f.write("\n")
             except Exception:
                 pass
-        chat.flush()
-        chat.write_line("")
+        else:
+            if not completed:
+                chat.flush()
+                chat.write_line("✓ 完成")
 
     async def _run_macro(self, text: str) -> None:
         """执行宏命令"""
