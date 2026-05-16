@@ -27,6 +27,7 @@ Footer {
 
 /* -- Tab 布局 -- */
 #main-tabs {
+    width: 7fr;
     height: 1fr;
     background: #0d1117;
 }
@@ -107,10 +108,6 @@ Underline.-active {
     height: 1fr;
     border-left: tall #30363d;
     background: #0d1117;
-    overflow-y: auto;
-    scrollbar-color: #30363d;
-    scrollbar-color-hover: #484f58;
-    scrollbar-color-active: #58a6ff;
 }
 
 #sidebar-session-title {
@@ -122,8 +119,13 @@ Underline.-active {
 }
 
 #sidebar-session {
+    height: 1fr;
+    overflow-y: auto;
     padding: 0 1;
     background: #0d1117;
+    scrollbar-color: #30363d;
+    scrollbar-color-hover: #484f58;
+    scrollbar-color-active: #58a6ff;
 }
 
 #chat-area {

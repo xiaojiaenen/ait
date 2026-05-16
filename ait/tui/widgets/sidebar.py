@@ -1,7 +1,7 @@
 """右侧侧边栏 — 会话活动 / 技能调用 / 审计记录，始终可见且可滚动"""
 from __future__ import annotations
 
-from textual.containers import VerticalScroll
+from textual.containers import Vertical
 from textual.widgets import Static
 
 
@@ -24,7 +24,7 @@ TOOL_CN_NAMES = {
 }
 
 
-class Sidebar(VerticalScroll):
+class Sidebar(Vertical):
     """右侧侧边栏 — 始终可见，展示会话活动、技能调用、审计记录"""
 
     def __init__(self):
