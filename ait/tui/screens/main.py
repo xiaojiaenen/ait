@@ -39,6 +39,9 @@ class ChatInput(TextArea):
             super().__init__()
             self.text = text
 
+    def __init__(self):
+        super().__init__(id="input-bar", soft_wrap=True)
+
     def action_submit(self) -> None:
         text = self.text
         if text.strip():
@@ -91,7 +94,7 @@ class MainScreen(Screen):
                 with TabPane("审计", id="tab-audit"):
                     yield AuditPanel()
             yield Sidebar()
-        yield ChatInput(id="input-bar")
+        yield ChatInput()
         yield Static("", id="node-suggest")
         yield Footer()
 

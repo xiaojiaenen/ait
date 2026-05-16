@@ -89,6 +89,8 @@ Underline.-active {
     padding: 0 1;
     background: #161b22;
     color: #c9d1d9;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 #input-bar:focus {
