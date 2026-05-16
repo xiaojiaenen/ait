@@ -500,9 +500,9 @@ class MainScreen(Screen):
                     first_text = True
                     msg = event.data.get("message", "")
                     if msg:
-                        chat.write_line("*操作未能完成: {}*".format(msg))
+                        chat.write_line("── ✗ {} ──".format(msg))
                     else:
-                        chat.write_line("*操作未能完成*")
+                        chat.write_line("── ✗ 操作失败 ──")
                     audit_error = {
                         "time": getattr(self, "_tool_time", ""),
                         "node": getattr(self, "_tool_node", "-"),
@@ -520,13 +520,13 @@ class MainScreen(Screen):
                         pass
                 elif event.type == "done":
                     chat.flush()
-                    chat.write_line("✓ 完成")
+                    chat.write_line("── ✓ 完成 ──")
                     completed = True
         except Exception as e:
             chat.flush()
             chat.write_line("")
             err_type = type(e).__name__
-            chat.write_line("*响应中断: {}*".format(err_type))
+            chat.write_line("── ✗ {} ──".format(err_type))
             # 将详细错误写入日志文件
             try:
                 log_path = self.config_dir / "error.log"
@@ -540,7 +540,7 @@ class MainScreen(Screen):
         else:
             if not completed:
                 chat.flush()
-                chat.write_line("✓ 完成")
+                chat.write_line("── ✓ 完成 ──")
 
     async def _run_macro(self, text: str) -> None:
         """执行宏命令"""
