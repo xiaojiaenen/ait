@@ -101,32 +101,36 @@ class OpsAgent:
             policy=DangerousCommandPolicy(),
         )
 
+        # 根据实际可用技能构建 SkillHook 指令
+        skill_names = [s.name for s in self.skill_manager.list_skills()]
+        skill_instruction = (
+            "你有运维技能库可以调用，当前可用技能："
+            + ", ".join(skill_names)
+            + "。\n重要规则：\n"
+            "1. 当用户任务涉及运维操作时，第一步必须调用 `list_skills` 确认可用技能\n"
+            "2. 找到匹配技能后，必须调用 `load_skill` 加载技能正文\n"
+            "3. 技能正文包含经过验证的命令模板和参数说明，优先按技能指导执行\n"
+            "4. 不要跳过技能直接执行命令，技能手册可以避免错误参数和超时问题"
+        ) if skill_names else ""
+
         # Agent
+        hooks = []
+        if skill_instruction:
+            hooks.append(SkillHook(instruction=skill_instruction))
+        hooks.extend([
+            ContextCompressionHook(
+                compressor=LLMContextCompressor(self.llm),
+                compress_after_turns=30,
+                keep_recent_turns=10,
+            ),
+            StorageHook(self.storage),
+            self.hitl_hook,
+            ConsoleHook(),
+        ])
         self.agent = Agent(
             llm=self.llm,
             tools=self.tools,
-            hooks=[
-                SkillHook(
-                    instruction=(
-                        "你有运维技能库，必须在涉及以下领域时使用："
-                        "Hadoop/HDFS/YARN、Hive、Spark、Flink、Kafka、Doris、"
-                        "DolphinScheduler、Dinky、Flume、ZooKeeper。\n"
-                        "重要规则：\n"
-                        "1. 当用户任务涉及上述任一领域时，第一步必须调用 `list_skills` 查看可用技能\n"
-                        "2. 找到匹配技能后，必须调用 `load_skill` 加载技能正文\n"
-                        "3. 技能正文包含经过验证的命令模板和参数说明，优先按技能指导执行\n"
-                        "4. 不要跳过技能直接执行命令，技能手册可以避免错误参数和超时问题"
-                    )
-                ),
-                ContextCompressionHook(
-                    compressor=LLMContextCompressor(self.llm),
-                    compress_after_turns=30,
-                    keep_recent_turns=10,
-                ),
-                StorageHook(self.storage),
-                self.hitl_hook,
-                ConsoleHook(),
-            ],
+            hooks=hooks,
             default_system_prompt=OPS_SYSTEM_PROMPT,
             default_max_steps=999999,
         )
