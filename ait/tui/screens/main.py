@@ -31,6 +31,7 @@ class ChatInput(TextArea):
 
     BINDINGS = [
         Binding("enter", "submit", "提交", priority=True, show=False),
+        Binding("shift+enter", "newline", "换行", show=False),
     ]
 
     class Submitted(Message):
@@ -42,6 +43,10 @@ class ChatInput(TextArea):
         text = self.text
         if text.strip():
             self.post_message(self.Submitted(text))
+
+    def action_newline(self) -> None:
+        """Shift+Enter 插入换行"""
+        self.insert("\n")
 
 
 class MainScreen(Screen):
