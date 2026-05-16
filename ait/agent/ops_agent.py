@@ -108,12 +108,14 @@ class OpsAgent:
             hooks=[
                 SkillHook(
                     instruction=(
-                        "你有运维技能库可以调用。当用户的任务涉及以下领域时，"
-                        "先调用 `list_skills` 查看可用技能："
+                        "你有运维技能库，必须在涉及以下领域时使用："
                         "Hadoop/HDFS/YARN、Hive、Spark、Flink、Kafka、Doris、"
-                        "DolphinScheduler、Dinky、Flume、ZooKeeper。"
-                        "确认有匹配的技能后，调用 `load_skill` 获取详细运维手册作为参考。"
-                        "加载技能后根据手册中的命令模板和参数来执行操作。"
+                        "DolphinScheduler、Dinky、Flume、ZooKeeper。\n"
+                        "重要规则：\n"
+                        "1. 当用户任务涉及上述任一领域时，第一步必须调用 `list_skills` 查看可用技能\n"
+                        "2. 找到匹配技能后，必须调用 `load_skill` 加载技能正文\n"
+                        "3. 技能正文包含经过验证的命令模板和参数说明，优先按技能指导执行\n"
+                        "4. 不要跳过技能直接执行命令，技能手册可以避免错误参数和超时问题"
                     )
                 ),
                 ContextCompressionHook(
