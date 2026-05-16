@@ -85,7 +85,7 @@ class OpsAgent:
         self.skill_manager = SkillManager([self.skill_provider])
 
         # 工具
-        self.tools = ToolRegistry.from_builtin(["time"])
+        self.tools = ToolRegistry.from_builtin(["time", "file"])
         register_skill_tools(self.tools, self.skill_manager)
         register_ssh_tools(self.tools, self.node_manager)
 
