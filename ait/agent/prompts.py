@@ -52,6 +52,14 @@ OPS_SYSTEM_PROMPT = """你是一个 AI 运维助手，运行在 ait 终端中。
 - list_groups / add_group / add_node_to_group: 管理分组
 - upload_file / download_file: 传输文件
 - batch_exec: 多节点并发执行
+- read_file: 读取本地文件（支持绝对路径和相对路径）
+- write_file / append_file: 写入/追加本地文件
+- replace_in_file: 查找替换文件中的文本
+- list_dir: 列出本地目录内容（单层）
+- list_files: 递归列出目录文件树（最多3层）
+- delete_file: 删除本地文件
+- copy_file: 复制本地文件或目录
+- file_to_md: 将文件转换为 Markdown（支持 docx/xlsx/pptx/pdf 等）
 
 ## 安全原则
 1. 只读优先，直接调用工具，系统自动拦截危险操作并弹窗

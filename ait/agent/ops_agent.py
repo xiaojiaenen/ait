@@ -26,6 +26,7 @@ from wuwei.tools.builtin.skill_tools import register_skill_tools
 from ait.agent.prompts import OPS_SYSTEM_PROMPT
 from ait.nodes.manager import NodeManager
 from ait.tools.ssh_tools import register_ssh_tools
+from ait.tools.local_file_tools import register_local_file_tools
 
 
 class OpsAgent:
@@ -85,7 +86,8 @@ class OpsAgent:
         self.skill_manager = SkillManager([self.skill_provider])
 
         # 工具
-        self.tools = ToolRegistry.from_builtin(["time", "file"])
+        self.tools = ToolRegistry.from_builtin(["time"])
+        register_local_file_tools(self.tools)
         register_skill_tools(self.tools, self.skill_manager)
         register_ssh_tools(self.tools, self.node_manager)
 
