@@ -30,6 +30,7 @@ class MainScreen(Screen):
     BINDINGS = [
         Binding("ctrl+c", "quit", "退出", show=False),
         Binding("ctrl+l", "clear", "清屏"),
+        Binding("ctrl+y", "copy_chat", "复制对话"),
         Binding("1", "switch_tab('chat')", "对话", show=False),
         Binding("2", "switch_tab('nodes')", "节点", show=False),
         Binding("3", "switch_tab('metrics')", "指标", show=False),
@@ -79,7 +80,7 @@ class MainScreen(Screen):
         chat = self.query_one(ChatPanel)
         chat.write_line("# ait — AI 运维助手")
         chat.write_line("")
-        chat.write_line("`1-5` 面板  `↑↓` 历史  `Ctrl+L` 清屏")
+        chat.write_line("`1-5` 面板  `↑↓` 历史  `Ctrl+Y` 复制  `Ctrl+L` 清屏")
 
     # -- Tab switching --
 
@@ -117,6 +118,18 @@ class MainScreen(Screen):
     def action_clear(self) -> None:
         self.query_one(ChatPanel).clear()
         self.query_one(Sidebar).clear_results()
+
+    def action_copy_chat(self) -> None:
+        """复制整个对话文本到剪贴板"""
+        text = self.query_one(ChatPanel).get_current_text()
+        if text:
+            try:
+                self.app.copy_to_clipboard(text)
+                self.notify("已复制到剪贴板", timeout=2)
+            except Exception:
+                self.notify("复制失败（终端不支持）", severity="warning", timeout=2)
+        else:
+            self.notify("暂无对话内容", timeout=2)
 
     # -- Agent lifecycle --
 

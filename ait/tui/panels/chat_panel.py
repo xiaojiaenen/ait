@@ -63,6 +63,10 @@ class ChatPanel(Vertical):
         except Exception:
             pass
 
+    def get_current_text(self) -> str:
+        """获取当前对话的原始文本"""
+        return self._current_text
+
     def clear(self) -> None:
         self._current_text = ""
         try:
