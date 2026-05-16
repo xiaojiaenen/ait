@@ -82,6 +82,7 @@ Underline.-active {
 /* -- 输入栏 -- */
 #input-bar {
     dock: bottom;
+    width: 100%;
     height: 3;
     max-height: 8;
     border: tall #30363d;
