@@ -390,7 +390,6 @@ class MainScreen(Screen):
         try:
             first_text = True
             completed = False
-            chat.write_line("⏳ AI 处理中...")
             self._seen_tool_starts: set[str] = set()
             self._seen_tool_ends: set[str] = set()
             async for event in self.agent.stream(text):
