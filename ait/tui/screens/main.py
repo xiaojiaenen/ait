@@ -73,6 +73,7 @@ class MainScreen(Screen):
         super().__init__()
         self.config_dir = config_dir
         self.agent = None
+        self._agent_running = False
         self._command_history: list[str] = []
         self._history_index: int = -1
         self._saved_input: str = ""
@@ -328,6 +329,11 @@ class MainScreen(Screen):
         text = event.text.strip()
         if not text:
             return
+        if self._agent_running:
+            self.notify("Agent 正在执行中，请等待完成", severity="warning", timeout=2)
+            input_bar = self.query_one("#input-bar", ChatInput)
+            input_bar.clear()
+            return
         # 隐藏建议
         self.query_one("#node-suggest", Static).display = False
 
@@ -383,6 +389,7 @@ class MainScreen(Screen):
     # -- Agent execution --
 
     async def _run_agent(self, text: str) -> None:
+        self._agent_running = True
         chat = self.query_one(ChatPanel)
         sidebar = self.query_one(Sidebar)
         audit_panel = self.query_one(AuditPanel)
@@ -541,6 +548,8 @@ class MainScreen(Screen):
             if not completed:
                 chat.flush()
                 chat.write_line("── ✓ 完成 ──")
+        finally:
+            self._agent_running = False
 
     async def _run_macro(self, text: str) -> None:
         """执行宏命令"""
