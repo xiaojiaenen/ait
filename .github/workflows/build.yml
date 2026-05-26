@@ -7,29 +7,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-linux:
-    name: ait-linux-x86_64
-    runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install deps & Build
-        run: |
-          /opt/python/cp311-cp311/bin/pip install pyinstaller
-          /opt/python/cp311-cp311/bin/pip install -e .
-          /opt/python/cp311-cp311/bin/pyinstaller ait.spec --clean --noconfirm
-
-      - name: Rename binary
-        run: mv dist/ait ait-linux-x86_64
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ait-linux-x86_64
-          path: ait-linux-x86_64
-
   build:
     name: ${{ matrix.artifact }}
     runs-on: ${{ matrix.os }}
@@ -37,6 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - os: ubuntu-latest
+            artifact: ait-linux-x86_64
+            ext: ""
           - os: macos-latest
             artifact: ait-macos-arm64
             ext: ""
@@ -50,18 +30,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Build Linux (manylinux2014 — CentOS 7 / GLIBC 2.17)
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            quay.io/pypa/manylinux2014_x86_64 \
+            bash -ex -c "
+              /opt/python/cp311-cp311/bin/pip install --upgrade pip
+              /opt/python/cp311-cp311/bin/pip install pyinstaller
+              /opt/python/cp311-cp311/bin/pip install -e .
+              /opt/python/cp311-cp311/bin/pyinstaller ait.spec --clean --noconfirm
+              chown -R $(id -u):$(id -g) dist/
+            "
+          echo '=== Build output ==='
+          ls -lh dist/
+          file dist/ait
+
+      - name: Set up Python (macOS / Windows)
+        if: runner.os != 'Linux'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install deps (macOS / Windows)
+        if: runner.os != 'Linux'
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
           pip install -e .
 
-      - name: Build
+      - name: Build (macOS / Windows)
+        if: runner.os != 'Linux'
         run: pyinstaller ait.spec --clean --noconfirm
 
       - name: Rename binary
@@ -76,7 +77,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-linux, build]
+    needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
