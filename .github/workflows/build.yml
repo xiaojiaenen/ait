@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             artifact: ait-linux-x86_64
             ext: ""
           - os: macos-latest
@@ -30,21 +30,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Build Linux (manylinux2014 — CentOS 7 / GLIBC 2.17)
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm -v $(pwd):/src -w /src quay.io/pypa/manylinux2014_x86_64 bash -c "
+            /opt/python/cp311-cp311/bin/pip install pyinstaller
+            /opt/python/cp311-cp311/bin/pip install -e .
+            /opt/python/cp311-cp311/bin/pyinstaller ait.spec --clean --noconfirm
+          "
+
+      - name: Set up Python (macOS / Windows)
+        if: runner.os != 'Linux'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install deps (macOS / Windows)
+        if: runner.os != 'Linux'
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
           pip install -e .
 
-      - name: Build with PyInstaller
+      - name: Build (macOS / Windows)
+        if: runner.os != 'Linux'
         run: pyinstaller ait.spec --clean --noconfirm
 
-      - name: Rename binary
+      - name: Rename binary (all platforms)
         shell: bash
         run: mv dist/ait${{ matrix.ext }} ${{ matrix.artifact }}${{ matrix.ext }}
 
