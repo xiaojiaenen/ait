@@ -29,5 +29,7 @@ class AitApp(App):
 
 def launch(config_dir: Path) -> None:
     """启动 ait TUI"""
+    from ait.config import save_default_config
+    save_default_config(config_dir)
     app = AitApp(config_dir=config_dir)
     app.run()
